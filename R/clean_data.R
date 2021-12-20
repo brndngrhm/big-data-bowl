@@ -11,6 +11,7 @@ library(feather)
 library(skimr)
 library(janitor)
 library(timeDate)
+library(nflfastR)
 
 #------------------------------------------------
 # custom functions ----
@@ -50,18 +51,18 @@ data %>%
 
 #------------------------------------------------
 # load tracking data ----
-tracking_file_names <- 
-  c("tracking2018", "tracking2019", "tracking2020")
-
-# read in .feather files
-tracking_data <- 
-  setdiff(list.files(path = here("data", "raw"), pattern = "tracking"),
-          list.files(path = here("data", "raw"), pattern = ".csv")) %>%
-  map(., ~load_data(.x)) %>% 
-  set_names(nm = tracking_file_names)
-
-tracking_data %>%
-  map(glimpse)
+# tracking_file_names <- 
+#   c("tracking2018", "tracking2019", "tracking2020")
+# 
+# # read in .feather files
+# tracking_data <- 
+#   setdiff(list.files(path = here("data", "raw"), pattern = "tracking"),
+#           list.files(path = here("data", "raw"), pattern = ".csv")) %>%
+#   map(., ~load_data(.x)) %>% 
+#   set_names(nm = tracking_file_names)
+# 
+# tracking_data %>%
+#   map(glimpse)
 
 #------------------------------------------------
 # clean games  ----
@@ -99,8 +100,8 @@ games <-
          game_hour = hour(game_time_eastern),
          game_tod = case_when(
            hour(game_time_eastern) == 9 ~ 'morning',
-           hour(game_time_eastern) %in% c(12, 13 ) ~ 'afternoon',
-           hour(game_time_eastern) == 16 ~ 'late_afternoon',
+           hour(game_time_eastern) %in% c(12, 13, 15) ~ 'afternoon',
+           hour(game_time_eastern) %in% c(16, 17) ~ 'late_afternoon',
            hour(game_time_eastern) == 20 ~ 'night',
            hour(game_time_eastern) == 22 ~ 'late_night',
            TRUE ~ "FROG"),
@@ -220,3 +221,4 @@ write_feather(x = games, path = here("data", "clean", "games_clean.feather"))
 write_feather(x = players, path = here("data", "clean", "players_clean.feather"))
 write_feather(x = plays, path = here("data", "clean", "plays_clean.feather"))
 write_feather(x = scouting, path = here("data", "clean", "scouting_clean.feather"))
+

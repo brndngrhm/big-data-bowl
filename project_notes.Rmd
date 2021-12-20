@@ -1,0 +1,30 @@
+---
+title: "project_notes"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Kaggle page
+
+https://www.kaggle.com/c/nfl-big-data-bowl-2022/
+
+## Resources
+
+https://www.the33rdteam.com/case-study-impact-of-special-teams-on-nfl-success/
+https://www.footballstudyhall.com/2016/1/7/10725318/college-football-special-teams-ratings
+https://www.espn.com/nfl/insider/story/_/page/Outsiders30SpecialTeams/football-outsiders-30-best-nfl-special-teams-units-30-years-2017 
+
+https://nflreadr.nflverse.com/articles/dictionary_pbp.html
+
+https://www.stampedeblue.com/2019/8/12/18256932/drive-success-rate-and-other-stats-i-love-points-per-drive-efficiency-td-fg-rate 
+
+## Idea
+
+it benefits the kicking team when the receiving team returns a kickoff from the endzone: 
+they tend to not make it to the 25 yard line, longer field, lower drive success rate, lower points scored on avg..
+
+so when are recieving teams more likely to return a kickoff from the endzone?
+
