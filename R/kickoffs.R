@@ -152,10 +152,10 @@ folds <-
 recipe <- 
   recipe(return_type ~ ., data = training) %>%
   update_role(game_id, play_id, new_role = "ID Variable") %>%
-  step_nzv(all_predictors()) %>%
+  step_nzv(all_predictors(), -game_tod) %>%
   step_date(game_date, features = c("month", "dow")) %>%
   step_rm(game_date) %>%
-  step_unknown(all_nominal_predictors(), -all_outcomes()) %>%
+  # step_unknown(all_nominal_predictors(), -all_outcomes()) %>%
   # step_novel(all_nominal_predictors(), -all_outcomes()) %>%
   step_YeoJohnson(all_numeric_predictors(),  -month, -day_nm) %>%
   step_normalize(all_numeric_predictors(), -month, -day_nm) %>%
@@ -239,10 +239,11 @@ all_workflows <-
                   decision_tree = tree_spec,
                   glm = glm_spec,
                   cart = cart_spec,
-                  nnet = mlp_spec,
-                  naive_bayes = bayes_spec,
-                  svm = svm_spec,
-                  random_forest = rand_forest_spec)
+                  # nnet = mlp_spec,
+                  naive_bayes = bayes_spec
+                  # svm = svm_spec,
+                  # random_forest = rand_forest_spec
+    )
   )
 
 grid_ctrl <-
@@ -253,7 +254,8 @@ grid_ctrl <-
     verbose = TRUE
   )
 
-cl <- makeCluster(10)
+cl <- 
+  makeCluster(10)
 
 doParallel::registerDoParallel(cl)
 
@@ -271,17 +273,16 @@ results <-
 
 stopCluster(cl)
 
-workflowsets::rank_results(results %>% filter(!wflow_id %in% c("recipe_svm", "recipe_random_forest")), rank_metric = "roc_auc", select_best = T)
-
+workflowsets::rank_results(results, rank_metric = "roc_auc", select_best = T)
 
 autoplot(
-  results %>% filter(!wflow_id %in% c("recipe_svm", "recipe_random_forest")),
+  results,
   rank_metric = "roc_auc",  # <- how to order models
   metric = "roc_auc",       # <- which metric to visualize
   select_best = TRUE     # <- one point per workflow
 )
 
-autoplot(
+sautoplot(
   results  %>% filter(!wflow_id %in% c("recipe_svm", "recipe_random_forest")),
   rank_metric = "accuracy",  # <- how to order models
   metric = "accuracy",       # <- which metric to visualize
