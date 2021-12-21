@@ -16,15 +16,20 @@ output: html_notebook
      * most choose to punt but a placekick can be used
 * since kickoffs must happen, and kickoffs give the opposing team the a higher chance to score than if they were on defense, kickoff strategy is an important feature of the game
 
-### Questions
+### Hypothesis / Analysis Question
 
-* number of kickoffs landing short of the goal line have increased since there is a perceived notion that it puts the receiving team at a disadvantage
+* The number of kickoffs landing short of the goal line has increased, since there is a perceived notion that it puts the receiving team at a disadvantage
   * the thinking is, by having the kickoff land short of the goal line, the kicking team can stop the returner short of the 25 yard line (which is where they would start if they performed a touchback)
-* BUT not all endzone kickoffs result in a touchback, so *when* is an endzone kickoff likely to be returned?
-* and when an endzone kickoff is returned (instead of taking the free 25 yards) does it put the receiving team at a disadvantage?
-  * if so, is it more of a disadvantage than fielding a kick short of the goal line?
-  * if so, it makes sense for the kicking team to anticipate an endzone return, and kick the ball into the endzone instead of kicking it short of the goal line
-    
+  * but the flaw in this approach is thinking only alternative would be to kick into the endzone resulting in a touchback
+* but this isn't the case! endzone returns still occur!
+  * Returning a kickoff from the endzone, instead of taking a touchback, results in several disadvantages for the returning team:
+    * worse starting field position
+    * lower EPA
+    * higher chance of turnover occurring
+  * Despite the disadvantages, endzone returns still occur - why?
+    * so *when* is an endzone kickoff likely to be returned? are there certain conditions, when present, make an endzone return more likely?
+    * if there are, then it could be argued the kicking team could take advantage by kicking off into the receiving team's endzone *instead* of kicking it short of the goal line
+
 ### Potential Data Issues
 
 * how to handle penalties on returns
@@ -37,9 +42,46 @@ output: html_notebook
 * avg drive success for touchbacks; avg drive success for endzone kickoff returns; avg drive success for field returns
 * EPA curve for EPA vs kickoff landing yardline (include negative yards for endzone kickoffs)
 
+## Data Flow
+
+#### Raw data
+
+`csv_to_feather.R`  
+
+ * get Kaggle .csv files -> convert to .feather format -> write to `data/raw`
+ 
+ `get_supplemental_data.R`  
+ 
+ * get 10 years of play-by-play data from `{NFLFastR}` -> convert to .feather format -> write to `data/raw`
+
+#### Clean data
+
+`clean_data.R`  
+
+ * do some minor cleaning/formatting/add columns -> write to `data/clean`
+ 
+#### Analysis data
+
+`create_analysis_data.R`  
+
+ *  after exploration and analysis question development, do some more formatting to narrow data sets down to focus on kickoffs
+
 ## Resources
 
 * https://www.the33rdteam.com/case-study-impact-of-special-teams-on-nfl-success/
 * https://www.footballstudyhall.com/2016/1/7/10725318/college-football-special-teams-ratings
 * https://www.espn.com/nfl/insider/story/_/page/Outsiders30SpecialTeams/football-outsiders-30-best-nfl-special-teams-units-30-years-2017 
 * https://www.stampedeblue.com/2019/8/12/18256932/drive-success-rate-and-other-stats-i-love-points-per-drive-efficiency-td-fg-rate 
+
+## ramblings
+focus on kickoffs ----
+why give up free yards?
+for kickoffs, does starting yardline even matter? for that drive? for the outcome of the game?
+  look at expected drive success rate for each starting yardline; create a curve?
+What are the avg yards gained from an endzone kickoff return?
+Given a kickoff return happens from the endzone, whats the likelihood of getting to at least the 25 yard line (i.e. break even)?
+are endzone kickoff returns more likely to happen at certain times or with certain scores?
+  if so, how could a kicking team take advantage of this? if situations are identified where a receiver is more likely
+  to return from the endzone, how can the kicking team minimize the return yaradage?
+does likelihood of getting to at least the 25 yard line change depending on the strength of the *receiving* team special teams?
+does likelihood of getting to at least the 25 yard line change depending on the strength of the *kicking* team special teams?
