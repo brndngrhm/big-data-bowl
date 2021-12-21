@@ -1,30 +1,45 @@
 ---
-title: "project_notes"
-output: html_document
+title: "Big Data Bowl Notes/Ideas"
+output: html_notebook
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
+* Big Data Bowl: https://www.kaggle.com/c/nfl-big-data-bowl-2022/
+* NFLFastR data dictionary: https://nflreadr.nflverse.com/articles/dictionary_pbp.htm
+ 
+## Focus Area: Kickoffs
 
-## Kaggle page
+* kickoffs are the only event that *has* to happen in a game
+* nothing in the rules saying a team has to play offense (can take a knee every down, can run the ball backwards into own endzone...), or has to play
+  defense or (can let opponent score), or has to punt (can just always go for it), or has to attempt a field goal
+* But a kickoff *must* occur at the start of each half, and a team *must* kickoff after a score (the only exception being after a safety, where a kickoff is an option, but most teams choose to punt the ball on the free kick)
+     * After a safety, the team scored upon must put the ball in play by a free kick (punt, dropkick, or placekick) from their own 20-yard line
+     * most choose to punt but a placekick can be used
+* since kickoffs must happen, and kickoffs give the opposing team the a higher chance to score than if they were on defense, kickoff strategy is an important feature of the game
 
-https://www.kaggle.com/c/nfl-big-data-bowl-2022/
+### Questions
+
+* number of kickoffs landing short of the goal line have increased since there is a perceived notion that it puts the receiving team at a disadvantage
+  * the thinking is, by having the kickoff land short of the goal line, the kicking team can stop the returner short of the 25 yard line (which is where they would start if they performed a touchback)
+* BUT not all endzone kickoffs result in a touchback, so *when* is an endzone kickoff likely to be returned?
+* and when an endzone kickoff is returned (instead of taking the free 25 yards) does it put the receiving team at a disadvantage?
+  * if so, is it more of a disadvantage than fielding a kick short of the goal line?
+  * if so, it makes sense for the kicking team to anticipate an endzone return, and kick the ball into the endzone instead of kicking it short of the goal line
+    
+### Potential Data Issues
+
+* how to handle penalties on returns
+* how to handle injuries and turnovers on returns
+
+### Data/Metrics
+
+* endzone kickoff touchback vs return % over time (use this data or something else)
+* avg EPA for touchbacks; avg EPA for endzone kickoff returns; avg EPA for field returns
+* avg drive success for touchbacks; avg drive success for endzone kickoff returns; avg drive success for field returns
+* EPA curve for EPA vs kickoff landing yardline (include negative yards for endzone kickoffs)
 
 ## Resources
 
-https://www.the33rdteam.com/case-study-impact-of-special-teams-on-nfl-success/
-https://www.footballstudyhall.com/2016/1/7/10725318/college-football-special-teams-ratings
-https://www.espn.com/nfl/insider/story/_/page/Outsiders30SpecialTeams/football-outsiders-30-best-nfl-special-teams-units-30-years-2017 
-
-https://nflreadr.nflverse.com/articles/dictionary_pbp.html
-
-https://www.stampedeblue.com/2019/8/12/18256932/drive-success-rate-and-other-stats-i-love-points-per-drive-efficiency-td-fg-rate 
-
-## Idea
-
-it benefits the kicking team when the receiving team returns a kickoff from the endzone: 
-they tend to not make it to the 25 yard line, longer field, lower drive success rate, lower points scored on avg..
-
-so when are recieving teams more likely to return a kickoff from the endzone?
-
+* https://www.the33rdteam.com/case-study-impact-of-special-teams-on-nfl-success/
+* https://www.footballstudyhall.com/2016/1/7/10725318/college-football-special-teams-ratings
+* https://www.espn.com/nfl/insider/story/_/page/Outsiders30SpecialTeams/football-outsiders-30-best-nfl-special-teams-units-30-years-2017 
+* https://www.stampedeblue.com/2019/8/12/18256932/drive-success-rate-and-other-stats-i-love-points-per-drive-efficiency-td-fg-rate 

@@ -51,18 +51,18 @@ data %>%
 
 #------------------------------------------------
 # load tracking data ----
-# tracking_file_names <- 
-#   c("tracking2018", "tracking2019", "tracking2020")
-# 
-# # read in .feather files
-# tracking_data <- 
-#   setdiff(list.files(path = here("data", "raw"), pattern = "tracking"),
-#           list.files(path = here("data", "raw"), pattern = ".csv")) %>%
-#   map(., ~load_data(.x)) %>% 
-#   set_names(nm = tracking_file_names)
-# 
-# tracking_data %>%
-#   map(glimpse)
+tracking_file_names <-
+  c("tracking2018", "tracking2019", "tracking2020")
+
+# read in .feather files
+tracking_data <-
+  setdiff(list.files(path = here("data", "raw"), pattern = "tracking"),
+          list.files(path = here("data", "raw"), pattern = ".csv")) %>%
+  map(., ~load_data(.x)) %>%
+  set_names(nm = tracking_file_names)
+
+tracking_data %>%
+  map(glimpse)
 
 #------------------------------------------------
 # clean games  ----
@@ -215,10 +215,28 @@ scouting %>%
   add_table()
 
 #------------------------------------------------
-# save cleaned datasets ----
+# clean tracking data ----
+
+tracking_2018 <-
+  tracking_data$tracking2018 %>%
+  janitor::clean_names() 
+
+tracking_2019 <-
+  tracking_data$tracking2019 %>%
+  janitor::clean_names() 
+
+tracking_2020 <-
+  tracking_data$tracking2020 %>%
+  janitor::clean_names() 
+
+tracking <-
+  bind_rows(tracking_2018, tracking_2019, tracking_2020)
+
+#------------------------------------------------
+# save cleaned data ----
 
 write_feather(x = games, path = here("data", "clean", "games_clean.feather"))
 write_feather(x = players, path = here("data", "clean", "players_clean.feather"))
 write_feather(x = plays, path = here("data", "clean", "plays_clean.feather"))
 write_feather(x = scouting, path = here("data", "clean", "scouting_clean.feather"))
-
+write_feather(x = tracking, path = here("data", "clean", "tracking.feather"))
