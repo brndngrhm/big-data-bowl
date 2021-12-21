@@ -32,7 +32,7 @@ setdiff(
 tracking_raw <-
   load_data(type = "clean", file_name = "tracking.feather")
 
-# play by play data from NFLFastR; read from raw/, no prior cleaning done
+# play by play data from nflfastR; read from raw/, no prior cleaning done
 pbp <- 
   load_data(type = "raw", file_name = "nflfastR_data.feather")
 
@@ -74,6 +74,7 @@ kickoffs <-
   kickoffs_all %>% 
   filter(special_teams_result %in% c("Touchback", "Return"))
 
+# for eac kickoff, get the number of attempted endzone returns and cumulative yards
 kickoffs_with_returns <-
   kickoffs %>%
   filter(return_type %in% "Endzone Return") %>%
@@ -87,12 +88,28 @@ kickoffs_with_returns <-
          prev_endzone_return_attempts = lag(endzone_return_attempt, 1)
   )
 
-kickoffs <- 
+# add cumulative kickoff returns
+kickoffs <-
   kickoffs %>%
   left_join(., kickoffs_with_returns %>% 
               select(game_id, play_id, prev_endzone_return_attempts, prev_cuml_endzone_return_yards),
             by = c("game_id", "play_id")
-            ) %>% add_table()
+  )  %>% 
+  group_by(game_id) %>%
+  tidyr::fill(prev_endzone_return_attempts, prev_cuml_endzone_return_yards, .direction = "down") %>% 
+  mutate(prev_endzone_return_attempts = ifelse(is.na(prev_endzone_return_attempts), 0, prev_endzone_return_attempts),
+         prev_cuml_endzone_return_yards = ifelse(is.na(prev_cuml_endzone_return_yards), 0, prev_cuml_endzone_return_yards))
+
+# # calc avg yards allowed per return - adjust this to be as of time of kick
+# return_yards_allowed <- 
+#   kickoffs %>%
+#   mutate(recieving_team_name = ifelse(recieving_team == "visiting_team", visitor_team_abbr, home_team_abbr)) %>%
+#   group_by(recieving_team_name) %>%
+#   summarise(mean_return_yards_allowed = mean(kick_return_yardage, na.rm = T))
+
+# kickoffs <-
+#   kickoffs %>%
+#   left_join(., return_yards_allowed, by = c("recieving_team_name" == ))
 
 # play_ids for every kickoff play; used to subset tracking data
 kickoff_ids <- 
@@ -131,18 +148,6 @@ tracking_kickoff_ball <-
   filter(display_name == "football") %>% 
   mutate(tracking_kickoff_id = paste0(game_id, play_id)) %>%
   filter(tracking_kickoff_id %in% kickoff_ids)
-
-tracking_kickoff_ball %>% 
-  filter(game_id == 2018090600,
-         play_id == 677) %>%
-  group_by(frame_id) %>%
-  summarise(position = mean(x),
-            accel = mean(x), 
-           speed = mean(s)) %>%
-  ggplot(., aes(x = frame_id, y = speed)) +
-  geom_line() +
-  geom_point() + 
-  scale_x_continuous(breaks = seq(0, 1000, 10))
 
 remove(player_team)
 remove(tracking_raw)
@@ -185,20 +190,18 @@ kickoff_sequences <-
   tally(sort = T, name = "kickoff_event_sequences") %>%
   mutate(freq = kickoff_event_sequences / sum(kickoff_event_sequences))
 
-tracking_kickoff %>%
-  select(game_id, play_id, event_phase) %>%
-  group_by(game_id, play_id) %>%
-  distinct() %>%
-  group_by(event_phase) %>% 
-  tally(sort = T, name = "kickoff_events") %>% View
-
-View(kickoff_sequences)
-  
-kickoff_tracking %>%
-  select(game_id, play_id, event) %>%
-  distinct() %>%
-  group_by(event) %>% 
-  tally() %>% View
+# tracking_kickoff %>%
+#   select(game_id, play_id, event_phase) %>%
+#   group_by(game_id, play_id) %>%
+#   distinct() %>%
+#   group_by(event_phase) %>% 
+#   tally(sort = T, name = "kickoff_events") %>% View
+# 
+# kickoff_tracking %>%
+#   select(game_id, play_id, event) %>%
+#   distinct() %>%
+#   group_by(event) %>% 
+#   tally() %>% View
 
 #------------------------------------------------
 # scouting data ----
@@ -211,7 +214,7 @@ scouting_kickoff <-
 remove(scouting)
 
 #------------------------------------------------
-# play by play data ----
+# play by play data from nflfastR ----
 
 # filter play by play by play data for only kickoffs
 pbp_kickoff <- 

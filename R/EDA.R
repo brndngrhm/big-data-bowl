@@ -133,7 +133,9 @@ kickoffs %>%
        subtitle = "Excludes touchbacks")
 
 kickoffs %>%
-  left_join(., pbp_kickoff %>% select(old_game_id, play_id, epa) %>% distinct(), by = c("game_id" = "old_game_id", "play_id")) %>%
+  left_join(., pbp_kickoff %>% 
+              select(old_game_id, play_id, epa) %>% 
+              distinct(), by = c("game_id" = "old_game_id", "play_id")) %>%
   filter(return_type != "Touchback",
          between(epa, -4, 4)) %>%
   ggplot(., aes(x = return_type, y = epa, fill = return_type)) +
