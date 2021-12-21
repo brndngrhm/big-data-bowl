@@ -13,7 +13,6 @@ library(janitor)
 library(timeDate)
 library(nflfastR)
 
-
 #------------------------------------------------
 # custom functions ----
 round_numerics <- 
@@ -33,6 +32,11 @@ add_table <-
 load_clean_data <- 
   function(file_name){
     feather::read_feather(here("data", "clean", {{file_name}}))
+  }
+
+load_raw_data <- 
+  function(file_name){
+    feather::read_feather(here("data", "raw", {{file_name}}))
   }
 
 #------------------------------------------------
@@ -58,8 +62,11 @@ tracking_file_names <-
 tracking_data <-
   setdiff(list.files(path = here("data", "raw"), pattern = "tracking"),
           list.files(path = here("data", "raw"), pattern = ".csv")) %>%
-  map(., ~load_data(.x)) %>%
+  map(., ~load_clean_data(.x)) %>%
   set_names(nm = tracking_file_names)
+
+pbp <- 
+  read_feather(path = here("data", "raw", "nflfastR_pbp_2010_2020.feather"))
 
 #------------------------------------------------
 # datasets ----
@@ -73,8 +80,14 @@ games %>%
 players <- 
   data$players
 
+players %>% 
+  add_table()
+
 plays <- 
   data$plays
+
+plays %>% 
+  add_table()
 
 scouting <- 
   data$PFFScoutingData 
@@ -82,18 +95,54 @@ scouting <-
 scouting %>% 
   add_table()
 
-# tracking_2018 <- 
-#   tracking_data$tracking2018 
-# 
-# tracking_2018 %>% 
-#   janitor::clean_names() %>%
-#   filter(game_id == "2018090600",
-#          play_id == 677
-#          # display_name == "Foye Oluokun"
-#          ) %>%
-#   arrange(display_name, frame_id) %>%
-#   # sample_n(100) %>%
-#   add_table()
+tracking_2018 <-
+  tracking_data$tracking2018 %>%
+  janitor::clean_names() 
+
+tracking_2019 <-
+  tracking_data$tracking2019 %>%
+  janitor::clean_names() 
+
+tracking_2020 <-
+  tracking_data$tracking2020 %>%
+  janitor::clean_names() 
+
+tracking <-
+  bind_rows(tracking_2018, tracking_2019, tracking_2020)
+
+tracking_2018 %>%
+  janitor::clean_names() %>%
+  filter(game_id == "2018090600",
+         play_id == 677
+         # display_name == "Foye Oluokun"
+         ) %>%
+  arrange(display_name, frame_id) %>%
+  # sample_n(100) %>%
+  add_table()
+
+# tracking assign eahc player to home/away -> game_id, play_id -> plays -> game_id -> games to get home/away team names
+
+player_team <- 
+  tracking %>%
+  filter(display_name != "football") %>%
+  select(nfl_id, game_id, display_name, jersey_number, team) %>%
+  distinct() %>%
+  left_join(., games %>% select(game_id, season, ends_with("abbr")), by = c("game_id")) %>%
+  mutate(player_team = ifelse(team == "home", home_team_abbr, visitor_team_abbr)) %>% 
+  select(-ends_with("abbr"), -team)
+
+tracking %>% 
+  left_join(., player_team %>% 
+              select(nfl_id, game_id, player_team), 
+            by = c("nfl_id", "game_id")) %>%
+  mutate(kickoff_event = ifelse(event %in% c("kickoff", "kick_received", "first_contact", "tackle"),
+                                event,
+                                NA_character_)) %>%
+  tidyr::fill(kickoff_event, .direction = "down") %>% 
+  filter(game_id == "2018090600",
+         play_id == 677,
+         nfl_id == 38707) %>% 
+  View
 
 #------------------------------------------------
 # focus on kickoffs ----
@@ -108,33 +157,84 @@ scouting %>%
 # does likelihood of getting to at least the 25 yard line change depending on the strength of the *receiving* team special teams?
 # does likelihood of getting to at least the 25 yard line change depending on the strength of the *kicking* team special teams?
 
-data$plays %>% 
-  filter(special_teams_play_type == "Kickoff",
-         special_teams_result %in% c("Touchback", "Return"),
-         is.na(penalty_yards),
-         game_id == "2018090600"
-  ) %>%  
-  mutate(
-    return_start = 100 - (yardline_number + kick_length),
-    starting_yardline = case_when(
-      special_teams_result == "Touchback" ~ 25,
-      special_teams_result == "Return" ~ return_start + kick_return_yardage,
-      TRUE ~ NA_real_),
-    diff_from_default = starting_yardline - 25) %>% 
-  filter(special_teams_result == "Return",
-         return_start <= 0) %>% 
-  group_by(return_start, starting_yardline) %>%
-  summarise(count = n()) %>%
-  # ggplot(., aes(x = return_start, y = starting_yardline, color = rev(count))) +
-  ggplot(., aes(x = starting_yardline)) +
-  geom_histogram(bins = 35, alpha = .75) +
-  # coord_equal() + 
-  scale_x_continuous(breaks = seq(-10, 100, 10)) + 
-  scale_y_continuous(breaks = seq(0, 100, 10),  expand = c(0, .1)) + 
-  geom_vline(xintercept = 25) +
-  geom_vline(aes(xintercept = mean(starting_yardline, na.rm = T)), color = 'red', linetype = 'dashed') + 
-  geom_vline(aes(xintercept = median(starting_yardline, na.rm = T)), color = 'green', linetype = 'dashed')
-
+# starting yardline for endzone returns
+# data$plays %>% 
+#   filter(special_teams_play_type == "Kickoff",
+#          special_teams_result %in% c("Touchback", "Return"),
+#          is.na(penalty_yards)
+#          # game_id == "2018090600"
+#   ) %>%  
+#   mutate(
+#     return_start = 100 - (yardline_number + kick_length),
+#     starting_yardline = case_when(
+#       special_teams_result == "Touchback" ~ 25,
+#       special_teams_result == "Return" ~ return_start + kick_return_yardage,
+#       TRUE ~ NA_real_),
+#     diff_from_default = starting_yardline - 25) %>% 
+#   filter(special_teams_result == "Return",
+#          return_start <= 0) %>% 
+#   group_by(return_start, starting_yardline) %>%
+#   summarise(count = n()) %>%
+#   # ggplot(., aes(x = return_start, y = starting_yardline, color = rev(count))) +
+#   ggplot(., aes(x = starting_yardline)) +
+#   geom_histogram(bins = 35, alpha = .75) +
+#   scale_x_continuous(breaks = seq(-10, 100, 10)) + 
+#   scale_y_continuous(breaks = seq(0, 100, 10),  expand = c(0, .1)) + 
+#   geom_vline(xintercept = 25) +
+#   geom_vline(aes(xintercept = mean(starting_yardline, na.rm = T)), color = 'red', linetype = 'dashed') + 
+#   geom_vline(aes(xintercept = median(starting_yardline, na.rm = T)), color = 'green', linetype = 'dashed')
+# 
+# return_type_mean <- 
+#   data$plays %>% 
+#   filter(
+#     special_teams_play_type == "Kickoff",
+#     special_teams_result %in% c("Touchback", "Return"),
+#     is.na(penalty_yards)) %>%
+#   mutate(
+#     return_start = 100 - (yardline_number + kick_length),
+#     return_type = case_when(
+#       special_teams_result == "Return" & return_start <= 0 ~ "Endzone Return",
+#       special_teams_result == "Return" & return_start > 0 ~ "Field Return",
+#       special_teams_result == "Touchback" ~ "Touchback",
+#       TRUE ~ "FROG"),
+#     starting_yardline = case_when(
+#       special_teams_result == "Touchback" ~ 25,
+#       special_teams_result == "Return" ~ return_start + kick_return_yardage,
+#       TRUE ~ NA_real_)) %>%
+#   group_by(return_type) %>%
+#   summarise(mean = mean(starting_yardline, na.rm = T),
+#             median = median(starting_yardline, na.rm = T))
+#   
+# # starting yardline for endzone returns
+# data$plays %>% 
+#   filter(special_teams_play_type == "Kickoff",
+#          special_teams_result %in% c("Touchback", "Return"),
+#          is.na(penalty_yards)) %>% 
+#   mutate(
+#     return_start = 100 - (yardline_number + kick_length),
+#     return_type = case_when(
+#       special_teams_result == "Return" & return_start <= 0 ~ "Endzone Return",
+#       special_teams_result == "Return" & return_start > 0 ~ "Field Return",
+#       special_teams_result == "Touchback" ~ "Touchback",
+#       TRUE ~ "FROG"),
+#     starting_yardline = case_when(
+#       special_teams_result == "Touchback" ~ 25,
+#       special_teams_result == "Return" ~ return_start + kick_return_yardage,
+#       TRUE ~ NA_real_),
+#     diff_from_default = starting_yardline - 25) %>%
+#   filter(return_type != "touchback") %>%
+#   left_join(., return_type_mean, by = "return_type") %>%
+#   ggplot(., aes(x = starting_yardline, fill = return_type)) + 
+#   geom_histogram(bins = 50, alpha = .75) + 
+#   facet_wrap(.~return_type, scales = "free") + 
+#   geom_vline(xintercept = 25) +
+#   # geom_vline(aes(xintercept = mean), linetype = 'dashed') +
+#   geom_vline(aes(xintercept = median), linetype = 'dashed') +
+#   scale_y_continuous(expand = c(0, 1))  +
+#   scale_x_continuous(breaks= seq(0, 100, 5)) + 
+#   theme_minimal() + 
+#   scale_fill_manual(values = c("cornflowerblue", "tomato")) +
+#   theme(legend.position = 'none')
 
 data$plays %>% 
   filter(special_teams_play_type == "Kickoff",
@@ -145,96 +245,203 @@ data$plays %>%
   mutate(
     return_start = 100 - (yardline_number + kick_length),
     return_type = case_when(
-      special_teams_result == "Return" & return_start <= 0 ~ "endzone_return",
-      special_teams_result == "Return" & return_start > 0 ~ "field_return",
-      special_teams_result == "Touchback" ~ "touchback",
+      special_teams_result == "Return" & return_start <= 0 ~ "Endzone Return",
+      special_teams_result == "Return" & return_start > 0 ~ "Field Return",
+      special_teams_result == "Touchback" ~ "Touchback",
       TRUE ~ "FROG"),
     starting_yardline = case_when(
       special_teams_result == "Touchback" ~ 25,
       special_teams_result == "Return" ~ return_start + kick_return_yardage,
       TRUE ~ NA_real_),
-    diff_from_default = starting_yardline - 25) %>%
-  filter(return_type != "touchback") %>%
-  ggplot(., aes(x = starting_yardline, fill = return_type)) + 
-  geom_histogram(bins = 45, alpha = .95) + 
-  facet_wrap(.~return_type, scales = "free") + 
-  geom_vline(xintercept = 25) + 
-  geom_vline(aes(xintercept = mean(starting_yardline))) + 
-  scale_y_continuous(expand = c(0, 3))  + 
-  theme_minimal() + 
-  scale_fill_brewer(palette = 10) + 
-  theme(legend.position = 'none')
-
-data$plays %>% 
-  filter(special_teams_play_type == "Kickoff",
-         special_teams_result %in% c("Touchback", "Return"),
-         is.na(penalty_yards)
-         # game_id == "2018090600"
-  ) %>% 
-  mutate(
-    return_start = 100 - (yardline_number + kick_length),
-    return_type = case_when(
-      special_teams_result == "Return" & return_start <= 0 ~ "endzone_return",
-      special_teams_result == "Return" & return_start > 0 ~ "field_return",
-      special_teams_result == "Touchback" ~ "touchback",
-      TRUE ~ "FROG"),
-    starting_yardline = case_when(
-      special_teams_result == "Touchback" ~ 25,
-      special_teams_result == "Return" ~ return_start + kick_return_yardage,
-      TRUE ~ NA_real_),
-    diff_from_default = starting_yardline - 25) %>%
-  filter(return_type != "touchback") %>%
+    diff_from_default = starting_yardline - 25)
+  
+  kickoffs_clean %>%
+  filter(return_type != "Touchback") %>%
   ggplot(., aes(x = return_type, y = starting_yardline, fill = return_type)) + 
-  geom_boxplot(alpha = .75) + 
+  geom_jitter(alpha = .3, color = 'gray') + 
+  geom_boxplot(alpha = .75, outlier.shape = NA) + 
   coord_flip() + 
-  geom_hline(yintercept = 25) +
-  scale_y_continuous(expand = c(0, 3)) + 
+  geom_hline(yintercept = 25, linetype = 'dashed', color = "black") +
+  # scale_y_continuous(expand = c(0, 3)) + 
+  scale_y_continuous(breaks= seq(0, 100, 5)) + 
   theme_minimal() + 
-  scale_fill_brewer(palette = 2) + 
-  theme(legend.position = 'none')
+  scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
+  theme(legend.position = 'none',
+        panel.grid.minor = element_blank()) + 
+  labs(x = "", y = "\nDrive Starting Yardline",
+       title = "Running a kickoff out of the endzone tends to put the recieving team at a disadvantage")
 
 data$plays %>% 
+  left_join(., games %>% select(game_id, season), by = c("game_id")) %>%
   filter(special_teams_play_type == "Kickoff",
          special_teams_result %in% c("Touchback", "Return"),
-         is.na(penalty_yards)
-         # game_id == "2018090600"
-  ) %>% 
+         is.na(penalty_yards)) %>% 
   mutate(
     return_start = 100 - (yardline_number + kick_length),
     return_type = case_when(
-      special_teams_result == "Return" & return_start <= 0 ~ "endzone_return",
-      special_teams_result == "Return" & return_start > 0 ~ "field_return",
-      special_teams_result == "Touchback" ~ "touchback",
+      special_teams_result == "Return" & return_start <= 0 ~ "Endzone Return",
+      special_teams_result == "Return" & return_start > 0 ~ "Field Return",
+      special_teams_result == "Touchback" ~ "Touchback",
       TRUE ~ "FROG"),
     starting_yardline = case_when(
       special_teams_result == "Touchback" ~ 25,
       special_teams_result == "Return" ~ return_start + kick_return_yardage,
       TRUE ~ NA_real_),
-    diff_from_default = starting_yardline - 25) %>%
-  filter(return_type == "endzone_return") %>%
-  ggplot(., aes(x = factor(return_start), y = starting_yardline, fill = factor(return_start))) +
-  geom_boxplot() + 
-  coord_flip() + 
-  # facet_wrap(.~return_start, scales = "free") + 
+    diff_from_default = starting_yardline - 25)
+  
+  
+  kickoffs_clean %>%
+  group_by(return_type, season) %>%
+  tally() %>%
+  mutate(freq = n / sum(n),
+         season = factor(season), levels = c("2018", "2019", "2020")) %>%
+  ggplot(., aes(x = return_type, y = n, fill = season))  + 
+  geom_col(position = "dodge", alpha = .75) + 
   theme_minimal() + 
-  # scale_fill_brewer(palette = 1) +
-  theme(legend.position = 'none')
+  scale_y_continuous(expand = c(0, 10), breaks = seq(0, 1800, 50)) + 
+  scale_fill_manual(values = c("cornflowerblue", "tomato", "orange")) + 
+  labs(x = "", y = "Count", fill = "Season",
+       title = "Despite the relative disadvantage, teams are more often running kickoffs out of the endzone",
+       subtitle = "Are there certain game conditions tha make it more likely to return a kickoff out of the endzone?")
+
+# data$plays %>% 
+#   filter(special_teams_play_type == "Kickoff",
+#          special_teams_result %in% c("Touchback", "Return"),
+#          is.na(penalty_yards)
+#          # game_id == "2018090600"
+#   ) %>% 
+#   mutate(
+#     return_start = 100 - (yardline_number + kick_length),
+#     return_type = case_when(
+#       special_teams_result == "Return" & return_start <= 0 ~ "endzone_return",
+#       special_teams_result == "Return" & return_start > 0 ~ "field_return",
+#       special_teams_result == "Touchback" ~ "touchback",
+#       TRUE ~ "FROG"),
+#     starting_yardline = case_when(
+#       special_teams_result == "Touchback" ~ 25,
+#       special_teams_result == "Return" ~ return_start + kick_return_yardage,
+#       TRUE ~ NA_real_),
+#     diff_from_default = starting_yardline - 25) %>%
+#   filter(return_type == "endzone_return") %>%
+#   ggplot(., aes(x = factor(return_start), y = starting_yardline, fill = factor(return_start))) +
+#   geom_boxplot() + 
+#   coord_flip() + 
+#   # facet_wrap(.~return_start, scales = "free") + 
+#   theme_minimal() + 
+#   # scale_fill_brewer(palette = 1) +
+#   theme(legend.position = 'none')
 
 #------------------------------------------------
-# game detail data ----
+# game pbp detail data ----
 
-games_2018 <- nflfastR::load_pbp(2018)
+games_2018 <-
+  nflfastR::load_pbp(2018)
 
-data$plays %>% 
+pbp %>%
+  filter(kickoff_attempt == 1,
+         season >= 2011) %>%
+  group_by(season, touchback) %>%
+  tally() %>% 
+  mutate(freq = n / sum(n)) %>% 
+  ggplot(., aes(x = factor(season), group = touchback, y = freq, color = factor(touchback))) + 
+  geom_line() + 
+  geom_point() + 
+  scale_y_continuous(breaks = seq(0, 1, .1), limits = c(0, 1), labels = scales::percent) + 
+  labs(x = "Season", y = "", title = "More touchbacks are occuring")
+
+
+kickoff_dataset <- 
+  data$plays %>% 
+  left_join(., games %>% select(game_id, season), by = c("game_id")) %>%
+  filter(special_teams_play_type == "Kickoff",
+         special_teams_result %in% c("Touchback", "Return"),
+         is.na(penalty_yards)) %>% 
+  mutate(
+    return_start = 100 - (yardline_number + kick_length),
+    return_type = case_when(
+      special_teams_result == "Return" & return_start <= 0 ~ "Endzone Return",
+      special_teams_result == "Return" & return_start > 0 ~ "Field Return",
+      special_teams_result == "Touchback" ~ "Touchback",
+      TRUE ~ "FROG"),
+    starting_yardline = case_when(
+      special_teams_result == "Touchback" ~ 25,
+      special_teams_result == "Return" ~ return_start + kick_return_yardage,
+      TRUE ~ NA_real_),
+    diff_from_default = starting_yardline - 25)
+
+kickoffs_clean %>% 
+  left_join(., pbp %>% 
+              select(old_game_id, fixed_drive_result) %>%
+              mutate(old_game_id = as.numeric(old_game_id)),
+            by = c("game_id" = "old_game_id")) %>%
+  filter(fixed_drive_result != "End of half",
+         !is.na(fixed_drive_result),
+         return_type != "Field Return") %>%
+  group_by(return_type, fixed_drive_result) %>% 
+  tally() %>%
+  ungroup() %>% 
+  group_by(return_type) %>%
+  mutate(freq = n / sum(n)) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
+  ggplot(., aes(x = fixed_drive_result, y = freq, fill = return_type))  + 
+  geom_col(position = "dodge", alpha = .75) + 
+  theme_minimal() + 
+  # facet_wrap(.~return_type) + 
+  coord_flip() + 
+  geom_text(aes(label = paste(freq*100, "%")), position = position_dodge(width = .9), hjust = -.2) + 
+  scale_y_continuous(expand = c(0, 0), limits = c(0, .35), breaks = seq(0, 1, .05), labels = scales::percent) +
+  scale_fill_manual(values = c("cornflowerblue", "tomato", "orange"))
+
+kickoffs_clean %>% 
+  left_join(., pbp %>% 
+              select(old_game_id, epa) %>%
+              mutate(old_game_id = as.numeric(old_game_id)),
+            by = c("game_id" = "old_game_id")) %>%
+  filter(return_type != "Field Return") %>%
+  group_by(return_type) %>%
+  summarise(mean_epa = mean(epa, na.rm  = T)) %>% 
+  mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
+  ggplot(., aes(x = return_type, y = mean_epa, fill = return_type))  + 
+  geom_col(position = "dodge", alpha = .75) + 
+  theme_minimal() + 
+  # facet_wrap(.~return_type) + 
+  coord_flip() + 
+  # geom_text(aes(label = paste(freq*100, "%")), position = position_dodge(width = .9), hjust = -.2) + 
+  # scale_y_continuous(expand = c(0, 0), limits = c(0, .35), breaks = seq(0, 1, .05), labels = scales::percent) +
+  scale_fill_manual(values = c("cornflowerblue", "tomato", "orange"))
+
+pbp %>%
+  filter(kickoff_attempt == 1,
+         season >= 2011
+         # !(is.na(kickoff_returner_player_id)),
+           # kickoff_in_endzone == 1
+         ) %>%
+  # select(season, kickoff_returner_player_id, kickoff_in_endzone, drive_start_yard_line) %>% 
+  group_by(season, touchback) %>%
+  tally() %>% 
+  mutate(freq = n / sum(n)) %>% 
+  ggplot(., aes(x = factor(season), group = touchback, y = freq, color = factor(touchback))) + 
+  geom_line() + 
+  geom_point() + 
+  scale_y_continuous(breaks = seq(0, 1, .1), limits = c(0, 1), labels = scales::percent) + 
+  labs(x = "Season", y = "", title = "Mean Touchbacks per Season")
+
+
+  data$plays %>% 
   filter(special_teams_play_type == "Kickoff",
          special_teams_result %in% c("Touchback", "Return"),
          is.na(penalty_yards)
          # game_id == "2018090600"
   ) 
 
-test_game <- (games_2018 %>% 
-       filter(old_game_id == 2018090600)) %>%
-  select(drive_play_id_started, everything()) 
+test_game <- 
+  games_2018 %>% 
+  filter(old_game_id == 2018090600
+         # play_id == 1387
+         ) %>%
+  select(drive_play_id_started, everything()) %>%
+  select(where(~!all(is.na(.x))))
+
 view(test_game)
 
 games_2018 %>% 
