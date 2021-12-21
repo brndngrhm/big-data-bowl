@@ -13,52 +13,35 @@ library(janitor)
 library(timeDate)
 library(nflfastR)
 
-#------------------------------------------------
-# custom functions ----
-
-load_clean_data <- 
-  function(file_name){
-    feather::read_feather(here("data", "clean", {{file_name}}))
-  }
+source(here("R", "util.R"))
 
 #------------------------------------------------
 # load data ----
+
 file_names <- 
   c("games", "players", "plays", "PFFScoutingData")
-
-data <- 
-  setdiff(list.files(path = here("data", "clean"), pattern = ".feather"),
-          list.files(path = here("data", "clean"), pattern = "tracking")) %>%
-  map(., ~load_clean_data(.x)) %>% 
-  set_names(nm = file_names)
+  
+setdiff(
+  list.files(path = here("data", "clean"), pattern = ".feather"),
+  list.files(path = here("data", "clean"), pattern = "tracking")
+  ) %>%
+  map(., ~load_data(type = "clean", file_name = .x)) %>% 
+  set_names(nm = file_names) %>% 
+  list2env(., envir = .GlobalEnv)
 
 tracking_raw <-
-  feather::read_feather(here("data", "clean", "tracking.feather"))
+  load_data(type = "clean", file_name = "tracking.feather")
 
-# play by play data from NFLFastR
+# play by play data from NFLFastR; read from raw/, no prior cleaning done
 pbp <- 
-  read_feather(path = here("data", "raw", "nflfastR_data.feather"))
-
-games <- 
-  data$games
-
-players <- 
-  data$players
-
-plays <- 
-  data$plays
-
-scouting <- 
-  data$PFFScoutingData 
-
-remove(data)
+  load_data(type = "raw", file_name = "nflfastR_data.feather")
 
 #------------------------------------------------
 # kickoff data ----
 
 # all kickoffs, with some additional variables added around the type and length of return
 kickoffs_all <- 
-  data$plays %>% 
+  plays %>% 
   filter(special_teams_play_type == "Kickoff") %>% 
   mutate(
     return_start = 100 - (yardline_number + kick_length),
@@ -72,14 +55,13 @@ kickoffs_all <-
       special_teams_result == "Return" ~ return_start + kick_return_yardage,
       TRUE ~ NA_real_),
     diff_from_default = starting_yardline - 25)%>%
-  left_join(., data$games %>% 
+  left_join(., games %>% 
               mutate(teams = paste(home_team_abbr, visitor_team_abbr, sep = " "),
                      game_tod = case_when(
                        hour(game_time_eastern) == 9 ~ 'morning',
                        hour(game_time_eastern) %in% c(12, 13, 15) ~ 'afternoon',
                        hour(game_time_eastern) %in% c(16, 17) ~ 'late_afternoon',
-                       hour(game_time_eastern) == 20 ~ 'night',
-                       hour(game_time_eastern) == 22 ~ 'late_night',
+                       hour(game_time_eastern) %in% c(19, 20, 21, 22) ~ 'night',
                        TRUE ~ "FROG")), by = c("game_id")) %>%
   rowwise() %>%
   mutate(recieving_team = ifelse(trimws(str_remove(teams, possession_team)) == trimws(visitor_team_abbr), "visiting_team", "home_team"),
@@ -87,11 +69,30 @@ kickoffs_all <-
                                             pre_snap_visitor_score - pre_snap_home_score, 
                                             pre_snap_home_score - pre_snap_visitor_score)) 
 
-# kickoffs without fumbles, OOB,... only returns or touchbacks, no penalties
-kickoffs_clean <- 
+# kickoffs without fumbles, OOB,... only returns or touchbacks
+kickoffs <- 
   kickoffs_all %>% 
-  filter(special_teams_result %in% c("Touchback", "Return"),
-         is.na(penalty_yards))
+  filter(special_teams_result %in% c("Touchback", "Return"))
+
+kickoffs_with_returns <-
+  kickoffs %>%
+  filter(return_type %in% "Endzone Return") %>%
+  distinct() %>%
+  select(game_id, play_id, kick_return_yardage) %>%
+  group_by(game_id) %>%
+  arrange(game_id, play_id) %>%
+  mutate(endzone_return_attempt = dplyr::row_number(),
+         cuml_endzone_return_yards = cumsum(kick_return_yardage),
+         prev_cuml_endzone_return_yards = lag(cuml_endzone_return_yards, 1),
+         prev_endzone_return_attempts = lag(endzone_return_attempt, 1)
+  )
+
+kickoffs <- 
+  kickoffs %>%
+  left_join(., kickoffs_with_returns %>% 
+              select(game_id, play_id, prev_endzone_return_attempts, prev_cuml_endzone_return_yards),
+            by = c("game_id", "play_id")
+            ) %>% add_table()
 
 # play_ids for every kickoff play; used to subset tracking data
 kickoff_ids <- 
@@ -104,7 +105,7 @@ kickoff_ids <-
   pull(kickoff_key)
 
 #------------------------------------------------
-# tracking data
+# tracking data ----
 
 # assign team name to each player in tracking data
 player_team <- 
@@ -123,6 +124,25 @@ tracking_all <-
   left_join(., player_team %>% 
               select(nfl_id, game_id, player_team), 
             by = c("nfl_id", "game_id")) 
+
+# get ball position - used to ID when plays stop
+tracking_kickoff_ball <- 
+  tracking_raw %>%
+  filter(display_name == "football") %>% 
+  mutate(tracking_kickoff_id = paste0(game_id, play_id)) %>%
+  filter(tracking_kickoff_id %in% kickoff_ids)
+
+tracking_kickoff_ball %>% 
+  filter(game_id == 2018090600,
+         play_id == 677) %>%
+  group_by(frame_id) %>%
+  summarise(position = mean(x),
+            accel = mean(x), 
+           speed = mean(s)) %>%
+  ggplot(., aes(x = frame_id, y = speed)) +
+  geom_line() +
+  geom_point() + 
+  scale_x_continuous(breaks = seq(0, 1000, 10))
 
 remove(player_team)
 remove(tracking_raw)
@@ -150,7 +170,7 @@ kickoff_events <-
 
 tracking_kickoff <-
   tracking_kickoff %>%
-  left_join(., kickoff_events %>% select(-event), by = c("game_id", "play_id", "frame_id"))
+  left_join(., kickoff_events %>% select(-event), by = c("game_id", "play_id", "frame_id")) 
 
 remove(kickoff_events)
 
@@ -162,8 +182,17 @@ kickoff_sequences <-
   summarise(event = paste(event_phase, collapse = ', ')) %>%
   ungroup() %>%
   group_by(event) %>% 
-  tally(sort = T, name = "Kickoff_event_sequences") %>%
-  mutate(freq = Kickoff_event_sequences / sum(Kickoff_event_sequences))
+  tally(sort = T, name = "kickoff_event_sequences") %>%
+  mutate(freq = kickoff_event_sequences / sum(kickoff_event_sequences))
+
+tracking_kickoff %>%
+  select(game_id, play_id, event_phase) %>%
+  group_by(game_id, play_id) %>%
+  distinct() %>%
+  group_by(event_phase) %>% 
+  tally(sort = T, name = "kickoff_events") %>% View
+
+View(kickoff_sequences)
   
 kickoff_tracking %>%
   select(game_id, play_id, event) %>%
@@ -171,11 +200,8 @@ kickoff_tracking %>%
   group_by(event) %>% 
   tally() %>% View
 
-kickoff_tracking %>% 
-  filter(event == "kickoff_play") %>% View 
-
 #------------------------------------------------
-# scounting data
+# scouting data ----
 
 scouting_kickoff <- 
   scouting %>%
@@ -185,14 +211,58 @@ scouting_kickoff <-
 remove(scouting)
 
 #------------------------------------------------
-# play by play data
+# play by play data ----
 
+# filter play by play by play data for only kickoffs
 pbp_kickoff <- 
   pbp %>%
   mutate(old_game_id = as.numeric(old_game_id),
          tracking_kickoff_id = paste0(old_game_id, play_id)) %>%
   filter(tracking_kickoff_id %in% kickoff_ids)
 
+# create indicator for when a scoring drive results in a lead change
+lead_changes <-
+  pbp %>%
+  select(old_game_id, play_id, drive, total_home_score, total_away_score, home_team, away_team) %>%
+  mutate(leader = case_when(
+    total_away_score == total_home_score ~ "tie",
+    total_away_score < total_home_score ~ home_team,
+    total_away_score > total_home_score ~ away_team,
+    TRUE ~ "FROG"),
+    lead_change = ifelse(leader != lag(leader), 1, 0),
+    old_game_id = as.numeric(old_game_id)) %>%
+  group_by(old_game_id, drive) %>%
+  mutate(drive_resulted_in_lead_change = max(lead_change))
+
+# apply indicator to all drives
+all_drive_results <- 
+  pbp %>%
+  select(old_game_id, down, play_type, play_id, drive_play_id_started, drive_play_id_ended, fixed_drive_result, total_home_score, total_away_score) %>% 
+  mutate(prev_play_id = lag(play_id, 1),
+         prev_play_result = lag(fixed_drive_result, 1),
+         prev_play_home_score = lag(total_home_score, 1),
+         prev_play_away_score = lag(total_away_score, 1),
+         old_game_id = as.numeric(old_game_id)) %>%
+  distinct() %>% 
+  select(old_game_id, play_id, prev_play_id, prev_play_result, prev_play_home_score, prev_play_away_score) %>%
+  left_join(., lead_changes, by = c("old_game_id" = "old_game_id", "prev_play_id" = "play_id")) %>%
+  select(-prev_play_id)
+
+# filter for just kickoffs
+pbp_kickoff <- 
+  pbp_kickoff %>%
+  left_join(., all_drive_results, by = c("old_game_id", "play_id")) %>%
+  select(prev_play_result, prev_play_lead_change = drive_resulted_in_lead_change, everything())
+
 remove(pbp)
+remove(all_drive_results)
+remove(lead_changes)
+#------------------------------------------------
+# save data ----
 
-
+write_feather(x = kickoffs_all, path = here("data", "analysis", "kickoff_all_analysis.feather"))
+write_feather(x = kickoffs, path = here("data", "analysis", "kickoff_analysis.feather"))
+write_feather(x = tracking_kickoff, path = here("data", "analysis", "tracking_kickoff_analysis.feather"))
+write_feather(x = tracking_kickoff_ball, path = here("data", "analysis", "tracking_kickoff_ball_analysis.feather"))
+write_feather(x = scouting_kickoff, path = here("data", "analysis", "scouting_analysis.feather"))
+write_feather(x = pbp_kickoff, path = here("data", "analysis", "pbp_analysis.feather"))
