@@ -54,7 +54,7 @@ kickoffs_all <-
       special_teams_result == "Touchback" ~ 25,
       special_teams_result == "Return" ~ return_start + kick_return_yardage,
       TRUE ~ NA_real_),
-    diff_from_default = starting_yardline - 25)%>%
+    diff_from_default = starting_yardline - 25) %>%
   left_join(., games %>% 
               mutate(teams = paste(home_team_abbr, visitor_team_abbr, sep = " "),
                      game_tod = case_when(
@@ -74,42 +74,57 @@ kickoffs <-
   kickoffs_all %>% 
   filter(special_teams_result %in% c("Touchback", "Return"))
 
-# for eac kickoff, get the number of attempted endzone returns and cumulative yards
+# for each kickoff, get the number of attempted endzone returns and cumulative yards
 kickoffs_with_returns <-
   kickoffs %>%
   filter(return_type %in% "Endzone Return") %>%
   distinct() %>%
-  select(game_id, play_id, kick_return_yardage) %>%
-  group_by(game_id) %>%
-  arrange(game_id, play_id) %>%
+  mutate(recieving_team_name = ifelse(recieving_team == "visiting_team", visitor_team_abbr, home_team_abbr),
+         kicking_team_name = ifelse(trimws(str_remove(teams, recieving_team_name)) == trimws(visitor_team_abbr), visitor_team_abbr, home_team_abbr)) %>%
+  select(game_id, play_id, recieving_team_name, kick_return_yardage) %>%
+  group_by(game_id, recieving_team_name) %>%
+  arrange(game_id, recieving_team_name, play_id) %>%
   mutate(endzone_return_attempt = dplyr::row_number(),
          cuml_endzone_return_yards = cumsum(kick_return_yardage),
          prev_cuml_endzone_return_yards = lag(cuml_endzone_return_yards, 1),
-         prev_endzone_return_attempts = lag(endzone_return_attempt, 1)
-  )
+         prev_endzone_return_attempts = lag(endzone_return_attempt, 1)) 
 
 # add cumulative kickoff returns
 kickoffs <-
   kickoffs %>%
+  mutate(recieving_team_name = ifelse(recieving_team == "visiting_team", visitor_team_abbr, home_team_abbr),
+         kicking_team_name = ifelse(trimws(str_remove(teams, recieving_team_name)) == trimws(visitor_team_abbr), visitor_team_abbr, home_team_abbr)) %>%
   left_join(., kickoffs_with_returns %>% 
-              select(game_id, play_id, prev_endzone_return_attempts, prev_cuml_endzone_return_yards),
-            by = c("game_id", "play_id")
-  )  %>% 
-  group_by(game_id) %>%
+              select(game_id, play_id, prev_endzone_return_attempts, prev_cuml_endzone_return_yards, recieving_team_name),
+            by = c("game_id", "play_id", "recieving_team_name"))  %>% 
+  group_by(game_id, recieving_team_name) %>%
   tidyr::fill(prev_endzone_return_attempts, prev_cuml_endzone_return_yards, .direction = "down") %>% 
   mutate(prev_endzone_return_attempts = ifelse(is.na(prev_endzone_return_attempts), 0, prev_endzone_return_attempts),
          prev_cuml_endzone_return_yards = ifelse(is.na(prev_cuml_endzone_return_yards), 0, prev_cuml_endzone_return_yards))
 
-# # calc avg yards allowed per return - adjust this to be as of time of kick
-# return_yards_allowed <- 
-#   kickoffs %>%
-#   mutate(recieving_team_name = ifelse(recieving_team == "visiting_team", visitor_team_abbr, home_team_abbr)) %>%
-#   group_by(recieving_team_name) %>%
-#   summarise(mean_return_yards_allowed = mean(kick_return_yardage, na.rm = T))
+# calc avg yards allowed per return at time of kick - not quite right yet
+return_yards_allowed <-
+  kickoffs %>%
+  filter(return_type %in% c("Endzone Return", "Field Return")) %>%
+  distinct() %>%
+  select(game_id, play_id, teams, recieving_team, recieving_team_name, kicking_team_name, kick_return_yardage, visitor_team_abbr, home_team_abbr) %>%
+  group_by(game_id, kicking_team_name) %>% 
+  arrange(game_id, play_id, kicking_team_name) %>%
+  mutate(cuml_return_yards_allowed = cumsum(kick_return_yardage),
+         prev_cuml_return_yards_allowed = lag(cuml_return_yards_allowed, 1),
+         return_number = ifelse(!is.na(prev_cuml_return_yards_allowed), row_number()-1, NA_real_),
+         rolling_mean_return_yards_allowed = prev_cuml_return_yards_allowed /return_number)
 
-# kickoffs <-
-#   kickoffs %>%
-#   left_join(., return_yards_allowed, by = c("recieving_team_name" == ))
+kickoffs <-
+  kickoffs %>%
+  left_join(., return_yards_allowed %>% 
+              select(game_id, play_id, prev_cuml_return_yards_allowed, kicking_team_name, rolling_mean_return_yards_allowed),
+            by = c("game_id", "play_id", "kicking_team_name")
+  ) %>% 
+  group_by(game_id, kicking_team_name) %>%
+  tidyr::fill(prev_cuml_return_yards_allowed, .direction = "down") %>% 
+  mutate(prev_cuml_return_yards_allowed = ifelse(is.na(prev_cuml_return_yards_allowed), 0, prev_cuml_return_yards_allowed),
+         rolling_mean_return_yards_allowed = ifelse(is.na(rolling_mean_return_yards_allowed), 0, rolling_mean_return_yards_allowed))
 
 # play_ids for every kickoff play; used to subset tracking data
 kickoff_ids <- 
@@ -189,19 +204,6 @@ kickoff_sequences <-
   group_by(event) %>% 
   tally(sort = T, name = "kickoff_event_sequences") %>%
   mutate(freq = kickoff_event_sequences / sum(kickoff_event_sequences))
-
-# tracking_kickoff %>%
-#   select(game_id, play_id, event_phase) %>%
-#   group_by(game_id, play_id) %>%
-#   distinct() %>%
-#   group_by(event_phase) %>% 
-#   tally(sort = T, name = "kickoff_events") %>% View
-# 
-# kickoff_tracking %>%
-#   select(game_id, play_id, event) %>%
-#   distinct() %>%
-#   group_by(event) %>% 
-#   tally() %>% View
 
 #------------------------------------------------
 # scouting data ----

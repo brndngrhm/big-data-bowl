@@ -5,8 +5,21 @@ round_numerics <-
       mutate(across(where(is.numeric), ~ round(.x, 2)))
   }
 
+options(reactable.theme = reactableTheme(
+  color = "hsl(233, 9%, 87%)",
+  backgroundColor = "hsl(233, 9%, 19%)",
+  borderColor = "hsl(233, 9%, 22%)",
+  stripedColor = "hsl(233, 12%, 22%)",
+  highlightColor = "hsl(233, 12%, 24%)",
+  inputStyle = list(backgroundColor = "hsl(233, 9%, 25%)"),
+  selectStyle = list(backgroundColor = "hsl(233, 9%, 25%)"),
+  pageButtonHoverStyle = list(backgroundColor = "hsl(233, 9%, 25%)"),
+  pageButtonActiveStyle = list(backgroundColor = "hsl(233, 9%, 28%)")
+))
+
 add_table <- 
   function(data){
+    
     data %>%
       round_numerics() %>%
       reactable::reactable(., fullWidth = F, resizable = T, filterable = T, highlight = T, defaultPageSize = 10, 
