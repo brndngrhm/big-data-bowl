@@ -40,9 +40,10 @@ pbp <-
 # kickoff data ----
 
 # all kickoffs, with some additional variables added around the type and length of return
+
 kickoffs_all <- 
   plays %>% 
-  filter(special_teams_play_type == "Kickoff") %>% 
+  filter(special_teams_play_type == "Kickoff") %>%
   mutate(
     return_start = 100 - (yardline_number + kick_length),
     return_type = case_when(
@@ -62,7 +63,8 @@ kickoffs_all <-
                        hour(game_time_eastern) %in% c(12, 13, 15) ~ 'afternoon',
                        hour(game_time_eastern) %in% c(16, 17) ~ 'late_afternoon',
                        hour(game_time_eastern) %in% c(19, 20, 21, 22) ~ 'night',
-                       TRUE ~ "FROG")), by = c("game_id")) %>%
+                       TRUE ~ "FROG")), 
+            by = c("game_id")) %>%
   rowwise() %>%
   mutate(recieving_team = ifelse(trimws(str_remove(teams, possession_team)) == trimws(visitor_team_abbr), "visiting_team", "home_team"),
          recieving_team_score_diff = ifelse(recieving_team == visitor_team_abbr,
@@ -124,7 +126,8 @@ kickoffs <-
   group_by(game_id, kicking_team_name) %>%
   tidyr::fill(prev_cuml_return_yards_allowed, .direction = "down") %>% 
   mutate(prev_cuml_return_yards_allowed = ifelse(is.na(prev_cuml_return_yards_allowed), 0, prev_cuml_return_yards_allowed),
-         rolling_mean_return_yards_allowed = ifelse(is.na(rolling_mean_return_yards_allowed), 0, rolling_mean_return_yards_allowed))
+         rolling_mean_return_yards_allowed = ifelse(is.na(rolling_mean_return_yards_allowed), 0, rolling_mean_return_yards_allowed),
+         home_team_recieving_ind = ifelse(recieving_team_name == home_team_abbr, 1, 0))
 
 # play_ids for every kickoff play; used to subset tracking data
 kickoff_ids <- 
@@ -209,11 +212,11 @@ kickoff_sequences <-
 # scouting data ----
 
 scouting_kickoff <- 
-  scouting %>%
+  PFFScoutingData %>%
   mutate(tracking_kickoff_id = paste0(game_id, play_id)) %>%
   filter(tracking_kickoff_id %in% kickoff_ids)
 
-remove(scouting)
+remove(PFFScoutingData)
 
 #------------------------------------------------
 # play by play data from nflfastR ----
@@ -257,7 +260,9 @@ all_drive_results <-
 pbp_kickoff <- 
   pbp_kickoff %>%
   left_join(., all_drive_results, by = c("old_game_id", "play_id")) %>%
-  select(prev_play_result, prev_play_lead_change = drive_resulted_in_lead_change, everything())
+  select(prev_play_result, prev_play_lead_change = drive_resulted_in_lead_change, everything()) %>%
+  select(play_id, old_game_id, season_type, quarter_seconds_remaining, half_seconds_remaining, half_seconds_remaining, game_half,
+         drive_start_yard_line, away_timeouts_remaining, home_timeouts_remaining, stadium, surface, roof, div_game, prev_play_result, prev_play_lead_change, epa)
 
 remove(pbp)
 remove(all_drive_results)
