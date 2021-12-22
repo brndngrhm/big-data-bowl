@@ -20,46 +20,18 @@ library(doParallel)
 
 options(tidymodels.dark = TRUE) 
 
-#------------------------------------------------
-# custom functions ----
-round_numerics <- 
-  function(data){
-    data %>%
-      mutate(across(where(is.numeric), ~ round(.x, 2)))
-  }
+source(here("R", "util.R"))
 
-add_table <- 
-  function(data){
-    data %>%
-      round_numerics() %>%
-      reactable::reactable(., fullWidth = F, resizable = T, filterable = T, highlight = T, defaultPageSize = 10, 
-                           showSortIcon = T, searchable = T, striped = T, compact = T, defaultExpanded = T)
-  }
-
-load_clean_data <- 
-  function(file_name){
-    feather::read_feather(here("data", "clean", {{file_name}}))
-  }
 
 #------------------------------------------------
 # load data ----
-file_names <- 
-  c("games", "players", "plays", "PFFScoutingData")
-
-# read in .feather files
-data <- 
-  setdiff(list.files(path = here("data", "clean"), pattern = ".feather"),
-          list.files(path = here("data", "clean"), pattern = "tracking")) %>%
-  map(., ~load_clean_data(.x)) %>% 
-  set_names(nm = file_names)
-
-nflfastR_data <- 
-  read_feather(path = here("data", "raw", "nflfastR_data.feather"))
+kickoffs_model <- 
+  read_feather(path = here("data", "model", "kickoffs_model.feather"))
 
 #------------------------------------------------
 # kickoff data ----
 kickoffs <- 
-  data$plays %>% 
+  plays %>% 
   filter(special_teams_play_type == "Kickoff",
          special_teams_result %in% c("Touchback", "Return"),
          is.na(penalty_yards)
@@ -74,7 +46,7 @@ kickoffs <-
       TRUE ~ "FROG")
   ) %>%
   filter(return_type %in% c("endzone_return", "touchback")) %>%
-  left_join(., data$games %>% mutate(teams = paste(home_team_abbr, visitor_team_abbr, sep = " "),
+  left_join(., games %>% mutate(teams = paste(home_team_abbr, visitor_team_abbr, sep = " "),
                                      game_tod = case_when(
                                        hour(game_time_eastern) == 9 ~ 'morning',
                                        hour(game_time_eastern) %in% c(12, 13, 15) ~ 'afternoon',
@@ -91,7 +63,7 @@ kickoffs <-
   select(-c(down, yards_to_go, possession_team, special_teams_play_type, kicker_id, kick_blocker_id, yardline_side, 
             yardline_number, starts_with("penalty"), starts_with("pre"), pass_result, kick_length, kick_return_yardage, play_result, 
             absolute_yardline_number, teams, special_teams_result, play_description)) %>%
-  # left_join(., data$players %>% select(-c(display_name)), by = c("returner_id" = "nfl_id")) %>%
+  # left_join(., players %>% select(-c(display_name)), by = c("returner_id" = "nfl_id")) %>%
   # mutate(game_day_age = as.numeric(as.Date(game_date) - birth_date)/365) %>%
   # select(-c(birth_date, current_age)) %>%
   left_join(., nflfastR_data %>% 
@@ -100,10 +72,9 @@ kickoffs <-
                      home_timeouts_remaining, away_timeouts_remaining, 
                      temp, wind, surface), by = c("game_id" = "old_game_id", "play_id" = "play_id")) %>% 
   mutate(recieving_team_timeouts_remaining = ifelse(recieving_team == visitor_team_abbr, away_timeouts_remaining, home_timeouts_remaining)) %>%
-  select(-c(home_timeouts_remaining, away_timeouts_remaining)) %>%
+  select(-c(home_timeouts_remaining, away_timeouts_remaining, stadium)) %>%
   distinct()
 
-# kickoffs %>% add_table()
 
 #------------------------------------------------
 # model_prep ----
