@@ -73,6 +73,8 @@ output: html_notebook
 * https://www.espn.com/nfl/insider/story/_/page/Outsiders30SpecialTeams/football-outsiders-30-best-nfl-special-teams-units-30-years-2017 
 * https://www.stampedeblue.com/2019/8/12/18256932/drive-success-rate-and-other-stats-i-love-points-per-drive-efficiency-td-fg-rate 
 * https://www.kaggle.com/c/nfl-big-data-bowl-2022/discussion/294736
+* https://www.tidymodels.org/find/parsnip/
+
 ## ramblings
 focus on kickoffs ----
 why give up free yards?
