@@ -101,7 +101,7 @@ kickoffs %>%
   coord_flip() +
   geom_hline(yintercept = 25, linetype = 'dashed', color = "black") +
   theme_minimal() +
-  theme(text = big_labels()) + 
+  theme(text = add_big_labels()) + 
   theme(legend.position = 'none') +
   labs(x = "Kickoff Yards into Endzone", y = "Drive Starting Yardline",
        title = "Fewer kickoffs are returned from Deep in the Endzone",
@@ -116,7 +116,7 @@ kickoffs %>%
   coord_flip() + 
   geom_vline(xintercept = 25, linetype = 'dashed', color = "black") +
   theme_minimal() +
-  theme(text = big_labels()) + 
+  theme(text = add_big_labels()) + 
   # theme(legend.position = 'none') +
   scale_color_manual(values = c("cornflowerblue", "tomato")) + 
   labs(y = "Kickoff Hangtime (seconds)", x = "Drive Starting Yardline", color = "",
@@ -136,7 +136,7 @@ kickoffs %>%
   scale_y_continuous(breaks = seq(-4, 4, .5)) +
   coord_flip() +
   theme_minimal() +
-  theme(text = big_labels()) + 
+  theme(text = add_big_labels()) + 
   theme(legend.position = 'none') +
   scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
   labs(x = "", y = "EPA",
@@ -163,7 +163,7 @@ kickoffs %>%
   geom_hline(aes(yintercept = overall_mean_n), linetype = 'dashed') +
   geom_vline(aes(xintercept = overall_mean_yards), linetype = 'dashed') +
   theme_minimal() +
-  theme(text = big_labels()) +
+  theme(text = add_big_labels()) +
   theme(legend.position = 'none') +
   labs(y = "Avg Endzone Returns per Game\n", x = "\nAvg Return Yards",
        title = "Endzone Kickoff Returns 2018-2020")

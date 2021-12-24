@@ -5,6 +5,22 @@ output: html_notebook
 
 * Big Data Bowl: https://www.kaggle.com/c/nfl-big-data-bowl-2022/
 * NFLFastR data dictionary: https://nflreadr.nflverse.com/articles/dictionary_pbp.htm
+
+SPARKIE: 
+special teams
+planning
+a
+return of a 
+kickoff 
+in the
+endzone
+
+SPARK: 
+special teams
+panicking
+and
+returning a 
+kickoff 
  
 ## Focus Area: Kickoffs
 

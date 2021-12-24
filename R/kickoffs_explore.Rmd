@@ -1,0 +1,247 @@
+---
+title: "Big Data Bowl: Endzone Kickoff Exploration"
+output: 
+  html_document:
+    toc: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.height = 8, fig.width = 12, message = F, warning = F)
+
+library(tidyverse)
+library(lubridate)
+library(stringr)
+library(reactable)
+library(highcharter)
+library(purrr)
+library(here)
+library(feather)
+library(skimr)
+library(nflfastR)
+library(ggimage)
+library(RCurl)
+
+source(here("R", "util.R"))
+
+# load data
+
+# read in analysis data files
+file_names <- 
+  c("kickoff_all", "kickoffs", "pbp_kickoff", "scouting_kickoff", "tracking_kickoff", "tracking_kickoff_ball")
+
+list.files(path = here("data", "analysis"), pattern = ".feather") %>%
+  map(., ~load_data(type = "analysis", file_name = .x)) %>% 
+  set_names(nm = file_names) %>% 
+  list2env(., envir = .GlobalEnv)
+
+# remove(tracking_kickoff_ball, scouting_kickoff, kickoff_all, tracking_kickoff)
+
+# team logos
+url_logo <- 
+  getURL("https://raw.githubusercontent.com/statsbylopez/BlogPosts/master/nfl_teamlogos.csv")
+df_logos <- 
+  read.csv(text = url_logo)
+```
+
+<style type="text/css">
+.main-container {
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+## Intro
+The goal of this analysis is to accurately predict when a receiving team will return a kick out of the endzone *instead* of taking a touchback. We will explore some potential differences between kickoffs that are returned out of the endzone vs those that result in a touchback.
+
+## Data Exploration
+
+After eliminating kickoffs that did not reach the endzone, we can start to explore the data
+
+### Kickoffs
+
+```{r}
+kickoffs %>%
+  filter(return_type %in% c("Endzone Return", "Touchback")) %>%
+  group_by(season, return_type) %>%
+  tally() %>%
+  mutate(freq = n/ sum(n)) %>%
+  ggplot(., aes(x = return_type, y = n, fill = return_type, label = paste(round(freq*100, 2), "%"))) + 
+  geom_col(alpha = .75) +
+  geom_label() + 
+  theme_minimal() + 
+  theme(legend.position = 'none',
+        text = add_big_labels(text_size = 16)) +
+  facet_wrap(.~season) + 
+  scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
+  labs(x = "", y = "Count", title = "Endzone returns are somewhat consistent across seasons",
+       subtitle = "About 19% of Endzone Kickoffs are Returned out of the Endzone", align = 'left')
+```
+
+```{r}
+team_stacked <- 
+  kickoffs %>%
+  filter(return_type %in% c("Endzone Return", "Touchback")) %>%
+  group_by(recieving_team_name, return_type) %>%
+  tally() %>%
+  mutate(freq = n/ sum(n)) %>%
+  ungroup() %>%
+  group_by(recieving_team_name) %>%
+  mutate(return_value = ifelse(return_type == "Endzone Return", freq, NA_real_),
+         return_value = max(return_value, na.rm = T)) %>%
+  ungroup() %>%
+  arrange(desc(return_value)) 
+
+ggplot(team_stacked, aes(x = reorder(recieving_team_name, return_value), y = freq, fill = as.character(return_type), label = paste0(round(freq*100, 2), "%"))) + 
+  geom_col(position = "stack", alpha = .75) +
+  geom_text(position = position_stack(vjust = .5), show.legend = F) +
+  coord_flip() +
+  theme_minimal() + 
+  theme(text = add_big_labels(text_size = 16)) +
+  # facet_wrap(.~season) +
+  scale_fill_manual(values = c("cornflowerblue", "tomato")) +
+  scale_y_continuous(expand = c(0, .01), labels = scales::percent)  +
+  labs(x = "", y = "", title = "Endzone return types vary by team", align = 'left', fill = NULL)
+```
+
+```{r}
+# starting yardline vs endzone kick depth
+kickoffs %>%
+  filter(return_type == "Endzone Return") %>%
+  group_by(game_id, recieving_team_name) %>%
+  summarise(n = n(),
+            median_starting_yardline = median(starting_yardline, na.rm = T)) %>%
+  ungroup() %>%
+  group_by(recieving_team_name) %>%
+  summarise(mean_n = mean(n),
+         median_starting_yardline = median(median_starting_yardline)) %>%
+  ungroup() %>%
+  mutate(overall_mean_n = mean(mean_n),
+         overall_median_yards = median(median_starting_yardline, na.rm = T)) %>%
+  left_join(., df_logos, by = c("recieving_team_name" = "team_code")) %>%
+  ggplot(., aes(x = median_starting_yardline, y = mean_n)) +
+  geom_image(aes(image = url), size = 0.04) + 
+  geom_hline(aes(yintercept = overall_mean_n), linetype = 'dashed') +
+  annotate("text", x = 25, y = 1.45, label = "Median: 1.49", vjust = .5) +
+  geom_vline(aes(xintercept = overall_median_yards), linetype = 'dashed')  +
+  annotate("text", x = 22.5, y = 2, label = "Mean: 22.75", vjust = -0.5) +
+  theme_minimal() +
+  theme(text = add_big_labels(text_size = 16)) +
+  theme(legend.position = 'none') +
+  labs(y = "Endzone Returns per Game\n", x = "Starting Field Position",
+       title = "Endzone Kickoff Returns")
+```
+
+```{r}
+# Starting yardline boxplot
+yardline <- 
+  kickoffs %>%
+  filter(return_type != "Touchback") %>%
+  ggplot(., aes(x = return_type, y = starting_yardline, fill = return_type)) + 
+  geom_jitter(alpha = .3, color = 'gray') + 
+  geom_boxplot(alpha = .75, outlier.shape = NA) + 
+  coord_flip() + 
+  geom_hline(yintercept = 25, linetype = 'dashed', color = "black") +
+  scale_y_continuous(breaks= seq(0, 100, 5)) + 
+  theme_minimal() + 
+  scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
+  theme(legend.position = 'none',
+        panel.grid.minor = element_blank(),
+        text = add_big_labels(text_size = 12)) + 
+  labs(x = "", y = "\nDrive Starting Yardline",
+       title = "Running a kickoff out of the endzone tends to put the recieving team at a disadvantage, and results in a lower EPA\n")
+
+# return type vs EPA
+epa <- 
+  kickoffs %>%
+  left_join(., pbp_kickoff %>% 
+              select(old_game_id, play_id, epa) %>% 
+              distinct(), by = c("game_id" = "old_game_id", "play_id")) %>%
+  filter(return_type != "Touchback",
+         between(epa, -4, 4)) %>%
+  ggplot(., aes(x = return_type, y = epa, fill = return_type)) +
+  geom_jitter(alpha = .3, color = 'gray') + 
+  geom_boxplot(alpha = .75, outlier.shape = NA) + 
+  scale_y_continuous(breaks = seq(-4, 4, .5)) +
+  coord_flip() +
+  theme_minimal() +
+  theme(text = add_big_labels(text_size = 12)) + 
+  theme(legend.position = 'none') +
+  scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
+  labs(x = "", y = "EPA", title = "\n")
+
+ggpubr::ggarrange(yardline, epa, ncol = 2, nrow = 1)
+
+```
+
+### Potential Predictors
+
+```{r}
+
+kickoff_with_pbp <- 
+  kickoffs %>%
+  filter(return_type %in% c("Endzone Return", "Touchback")) %>%
+  left_join(., pbp_kickoff, c("game_id" = "old_game_id", "play_id" = "play_id")) %>% 
+  mutate(recieving_team_timeouts_remaining = ifelse(recieving_team_name == home_team_abbr, home_timeouts_remaining, away_timeouts_remaining)) %>%
+  select(game_id, play_id, return_type, everything())
+
+numeric_cols <- 
+  kickoff_with_pbp %>% 
+  select(-c(game_id)) %>%
+  select(where(is.numeric)) %>%
+  names
+
+numeric_boxplots <-
+  function(col_name){
+    
+    # col_name <- "recieving_team_score_diff"
+      
+    kickoff_with_pbp %>%
+      select(return_type, one_of({{col_name}})) %>%
+      rename(predictor = 2) %>%
+      ggplot(., aes(x = return_type, y = predictor, fill = return_type)) + 
+      geom_jitter(alpha = .3, color = 'gray') + 
+      geom_boxplot(alpha = .75, outlier.shape = NA) + 
+      coord_flip() + 
+      theme_minimal() + 
+      scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
+      labs(x = "", y = "", title = paste("Return type vs", {{col_name}}))
+  }
+
+categorical_cols <- 
+  kickoff_with_pbp %>% 
+  select(-return_type) %>%
+  select(where(is.factor) | where(is.character)) %>%
+  names
+
+categorical_bar_plots <-
+  function(col_name){
+    
+    kickoff_with_pbp %>%
+      select(return_type, one_of({{col_name}})) %>%
+      rename(predictor = 2) %>%
+      group_by(predictor, return_type) %>%
+      tally() %>%
+      mutate(freq = n / sum(n)) %>%
+      ggplot(., aes(x = reorder(predictor, -freq), y = freq, fill = return_type, label = paste0(paste0(round(freq*100, 2), "%"), "\n(n = ", n, ")"))) + 
+      geom_col(position = 'dodge', alpha = .75) + 
+      geom_text(position = position_dodge(width = .9), vjust = -0.5) + 
+      theme_minimal() + 
+      scale_y_continuous(labels = scales::percent, breaks = seq(0, 1, .10)) + 
+      scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
+      labs(x = "", y = "Count", title = "80% of Endzone Kickoffs Result in a Touchback") + 
+      labs(x = "", y = "", title = paste("Return type vs", {{col_name}}))
+  }
+```
+
+#### Numeric
+```{r}
+map(numeric_cols, ~numeric_boxplots(.x))
+```
+
+#### Categorical
+```{r}
+map(categorical_cols, ~categorical_bar_plots(.x))
+```
