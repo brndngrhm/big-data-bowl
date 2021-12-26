@@ -63,7 +63,8 @@ kickoffs_all <-
                        hour(game_time_eastern) %in% c(12, 13, 15) ~ 'afternoon',
                        hour(game_time_eastern) %in% c(16, 17) ~ 'late_afternoon',
                        hour(game_time_eastern) %in% c(19, 20, 21, 22) ~ 'night',
-                       TRUE ~ "FROG")), 
+                       TRUE ~ "FROG"),
+                     ), 
             by = c("game_id")) %>%
   rowwise() %>%
   mutate(recieving_team = ifelse(trimws(str_remove(teams, possession_team)) == trimws(visitor_team_abbr), "visiting_team", "home_team"),
@@ -226,7 +227,11 @@ pbp_kickoff <-
   pbp %>%
   mutate(old_game_id = as.numeric(old_game_id),
          tracking_kickoff_id = paste0(old_game_id, play_id)) %>%
-  filter(tracking_kickoff_id %in% kickoff_ids)
+  filter(tracking_kickoff_id %in% kickoff_ids) %>%
+  mutate(surface = case_when(
+    surface %in% c("fieldturf", "sportturf", "a_turf", "matrixturf", "astroturf", "fieldturf ") ~ 'turf',
+    TRUE ~ surface)
+    )
 
 # create indicator for when a scoring drive results in a lead change
 lead_changes <-
@@ -242,19 +247,64 @@ lead_changes <-
   group_by(old_game_id, drive) %>%
   mutate(drive_resulted_in_lead_change = max(lead_change))
 
-# apply indicator to all drives
-all_drive_results <- 
+# apply indicator to all drives 2018091602, 2018091001, 2018092310, 2019110310, 2018090600, 2018090905 2229
+all_drive_results <-
   pbp %>%
-  select(old_game_id, down, play_type, play_id, drive_play_id_started, drive_play_id_ended, fixed_drive_result, total_home_score, total_away_score) %>% 
-  mutate(prev_play_id = lag(play_id, 1),
-         prev_play_result = lag(fixed_drive_result, 1),
-         prev_play_home_score = lag(total_home_score, 1),
-         prev_play_away_score = lag(total_away_score, 1),
-         old_game_id = as.numeric(old_game_id)) %>%
+  filter(!play_type_nfl %in% c("GAME_START", "END_QUARTER")
+         ) %>%
+  select(old_game_id, down, play_type, play_id, drive, game_half, qtr, time, play_type_nfl, drive_play_id_started, 
+         drive_play_id_ended, fixed_drive_result, drive_end_transition, total_home_score, total_away_score) %>%
+  mutate(fixed_drive_result = ifelse(fixed_drive_result %in% c("Touchdown", "Opp touchdown"), "Touchdown", fixed_drive_result)) %>%
+  group_by(old_game_id) %>%
+  mutate(
+    fixed_drive_result_adj = case_when(
+      time == "15:00" & qtr %in% c(1,3) & play_type_nfl == "KICK_OFF" ~ "start of half",
+      time == "10:00" & play_type_nfl == "KICK_OFF" & game_half == "Overtime" ~ "start of overtime",
+      drive == 1 ~ NA_character_,
+      TRUE ~ fixed_drive_result)) %>% 
+  ungroup() %>%
+  group_by(old_game_id, drive) %>%
+  mutate(start_of_period_ind = ifelse(fixed_drive_result_adj %in% c("start of half", "start of overtime"), 1, 0),
+         first_drive_of_period = max(start_of_period_ind),
+         fixed_drive_result_adj_adj = case_when(
+           first_drive_of_period == 1  ~  "start of period",
+           TRUE ~ fixed_drive_result_adj)) %>% 
+  ungroup() %>%
+  group_by(old_game_id) %>%
+  mutate(
+    prev_play_id = lag(play_id, 1),
+    prev_play_result = case_when(
+      is.na(prev_play_id) ~ NA_character_,
+      fixed_drive_result_adj_adj == "start of period" ~ "start of period",
+      is.na(prev_play_id) & fixed_drive_result_adj_adj == "start of period" ~ "start of period",
+      TRUE ~ lag(fixed_drive_result_adj_adj, 1)),
+    prev_play_home_score = lag(total_home_score, 1),
+    prev_play_away_score = lag(total_away_score, 1),
+    old_game_id = as.numeric(old_game_id)) %>%
   distinct() %>% 
+  # select(old_game_id, play_id, play_type, fixed_drive_result, fixed_drive_result_adj, fixed_drive_result_adj_adj, prev_play_result, everything()) %>% View
   select(old_game_id, play_id, prev_play_id, prev_play_result, prev_play_home_score, prev_play_away_score) %>%
   left_join(., lead_changes, by = c("old_game_id" = "old_game_id", "prev_play_id" = "play_id")) %>%
-  select(-prev_play_id)
+  select(-c(prev_play_id)) %>%
+    #fix some specific cases where prior play was 'no play' which messes with the logic above
+    mutate(prev_play_result = case_when(
+      old_game_id == 2018091605 & play_id == 2362 ~ "Touchdown",
+      old_game_id == 2018091605 & play_id == 2589 ~ "Touchdown",
+      old_game_id == 2019110310 & play_id == 3247 ~ "Touchdown",
+      old_game_id == 2018100711 & play_id == 3440 ~ "Touchdown", 
+      old_game_id == 2018101411 & play_id == 707 ~ "Touchdown", 
+      old_game_id == 2018102102 & play_id == 1539 ~ "Touchdown", 
+      old_game_id == 2018102900 & play_id == 1469 ~ "Field goal", 
+      old_game_id == 2018120204 & play_id == 4105 ~ "Touchdown",
+      old_game_id == 2019092207 & play_id == 3035 ~ "Touchdown",
+      old_game_id == 2019101305 & play_id == 3296 ~ "Touchdown",
+      old_game_id == 2019102711 & play_id == 1045 ~ "Touchdown",
+      old_game_id == 2018100400 & play_id == 1045 ~ "Touchdown",
+      old_game_id == 2019092201 & play_id == 1079 ~ "Field goal",
+      old_game_id == 2020091309 & play_id == 964 ~ "Touchdown",
+      old_game_id == 2018100400 & play_id == 2014 ~ "Touchdown",
+      TRUE ~ prev_play_result
+    ))
 
 # filter for just kickoffs
 pbp_kickoff <- 
@@ -262,7 +312,8 @@ pbp_kickoff <-
   left_join(., all_drive_results, by = c("old_game_id", "play_id")) %>%
   select(prev_play_result, prev_play_lead_change = drive_resulted_in_lead_change, everything()) %>%
   select(play_id, old_game_id, season_type, quarter_seconds_remaining, half_seconds_remaining, half_seconds_remaining, game_half,
-         drive_start_yard_line, away_timeouts_remaining, home_timeouts_remaining, stadium, surface, roof, div_game, prev_play_result, prev_play_lead_change, epa)
+         drive_start_yard_line, away_timeouts_remaining, home_timeouts_remaining, stadium, surface, roof, div_game, prev_play_result, prev_play_lead_change, epa) %>%
+  mutate(prev_play_result = ifelse(is.na(prev_play_result), "start of period", prev_play_result))
 
 remove(pbp)
 remove(all_drive_results)

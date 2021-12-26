@@ -43,16 +43,16 @@ load_anaylsis_data <-
     feather::read_feather(here("data", {{type}}, {{file_name}}))
   }
 
-load_data <- 
-  function(type, file_name){
-    if(!type %in% c("raw", "clean", "analysis")) stop('type must be one of "raw", "clean", "analysis"')
-    feather::read_feather(here("data", {{type}}, {{file_name}}))
-  }
-
-add_big_labels <- 
-  function(text_size = 14){
-    text = element_text(size = text_size)
-  }
+  load_data <- 
+    function(type, file_name){
+      if(!type %in% c("raw", "clean", "analysis")) stop('type must be one of "raw", "clean", "analysis"')
+      feather::read_feather(here("data", {{type}}, {{file_name}}))
+    }
+  
+  add_big_labels <- 
+    function(text_size = 14){
+      text = element_text(size = text_size)
+    }
 
 save_experiment <-
   function(experiment, workflow_name){
