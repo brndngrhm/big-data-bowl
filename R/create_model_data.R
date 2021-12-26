@@ -44,15 +44,16 @@ model_data_prep <-
             yardline_side, starts_with("penalty"), starts_with("pre_snap"), pass_result, kick_return_yardage, play_result, 
             absolute_yardline_number, return_start, starting_yardline, diff_from_default, game_time_eastern, home_team_abbr, visitor_team_abbr, game_datetime,
             teams, recieving_team, recieving_team_name, kicking_team_name, epa, drive_start_yard_line, home_timeouts_remaining, away_timeouts_remaining,
-            stadium, quarter_seconds_remaining)) %>% 
+            stadium, quarter_seconds_remaining,
+            recieving_team_score_diff, season_type, home_team_recieving_ind, holiday, 
+            overseas_game_ind, month, day_nm, game_tod, game_hour, week, season,
+            prev_cuml_endzone_return_yards, prev_cuml_return_yards_allowed)) %>% 
   select(game_id, play_id, return_type, everything()) %>%
   rename(kickoff_from_yardline = yardline_number)
 
 factor_cols <- 
-  c("quarter", "season", "game_hour", "game_tod", "primetime_ind", 
-    "overseas_game_ind", "holiday", "home_team_recieving_ind", "recieving_team_timeouts_remaining",
-    "season_type", "game_half", "surface", "roof", "div_game", "prev_play_result", "prev_play_lead_change", 
-    "prev_endzone_return_attempts", "week", "kick_direction_actual", "kickoff_from_yardline")
+  c("quarter", "recieving_team_timeouts_remaining", "game_half", "surface", "roof", "div_game", "prev_play_result", "prev_play_lead_change", 
+    "prev_endzone_return_attempts", "kick_direction_actual", "kickoff_from_yardline")
 
 model_data <- 
   model_data_prep %>%
