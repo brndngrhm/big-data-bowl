@@ -22,14 +22,14 @@ source(here("R", "util.R"))
 
 # read in analysis data files
 file_names <- 
-  c("kickoff_all", "kickoffs", "pbp_kickoff", "scouting_kickoff", "tracking_kickoff", "tracking_kickoff_ball")
+  c("kickoff_all", "kickoffs", "kickoff_tracking_avg_speed", "pbp_kickoff", "scouting_kickoff", "tracking_kickoff", "tracking_kickoff_ball")
 
 list.files(path = here("data", "analysis"), pattern = ".feather") %>%
   map(., ~load_data(type = "analysis", file_name = .x)) %>% 
   set_names(nm = file_names) %>% 
   list2env(., envir = .GlobalEnv)
 
-remove(tracking_kickoff_ball, kickoff_all, tracking_kickoff)
+remove(kickoff_all, tracking_kickoff, tracking_kickoff_ball)
 
 #------------------------------------------------
 # combine data ----
@@ -39,6 +39,7 @@ model_data_prep <-
   filter(return_type %in% c("Endzone Return", "Touchback")) %>%
   left_join(., pbp_kickoff, c("game_id" = "old_game_id", "play_id" = "play_id")) %>% 
   left_join(., scouting_kickoff %>% select(play_id, game_id, kick_direction_actual), c("game_id", "play_id")) %>% 
+  left_join(., kickoff_tracking_avg_speed, by = c("game_id" = "game_id", "play_id" = "play_id", "kicking_team_name" = "player_team")) %>% 
   mutate(recieving_team_timeouts_remaining = ifelse(recieving_team_name == home_team_abbr, home_timeouts_remaining, away_timeouts_remaining)) %>%
   select(-c(play_description, down, yards_to_go, game_clock, possession_team, special_teams_play_type, special_teams_result, kicker_id, returner_id, kick_blocker_id, 
             yardline_side, starts_with("penalty"), starts_with("pre_snap"), pass_result, kick_return_yardage, play_result, 
@@ -49,7 +50,8 @@ model_data_prep <-
             overseas_game_ind, month, day_nm, game_tod, game_hour, week, season,
             prev_cuml_endzone_return_yards, prev_cuml_return_yards_allowed)) %>% 
   select(game_id, play_id, return_type, everything()) %>%
-  rename(kickoff_from_yardline = yardline_number)
+  rename(kickoff_from_yardline = yardline_number,
+         prev_cuml_avg_ball_in_air_speed_kicking_team = prev_cuml_avg_ball_in_air_speed)
 
 factor_cols <- 
   c("quarter", "recieving_team_timeouts_remaining", "game_half", "surface", "roof", "div_game", "prev_play_result", "prev_play_lead_change", 

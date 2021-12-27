@@ -1,10 +1,4 @@
 
-round_numerics <- 
-  function(data){
-    data %>%
-      mutate(across(where(is.numeric), ~ round(.x, 2)))
-  }
-
 options(reactable.theme = reactableTheme(
   color = "hsl(233, 9%, 87%)",
   backgroundColor = "hsl(233, 9%, 19%)",
@@ -17,6 +11,11 @@ options(reactable.theme = reactableTheme(
   pageButtonActiveStyle = list(backgroundColor = "hsl(233, 9%, 28%)")
 ))
 
+round_numerics <- 
+  function(data){
+    data %>%
+      mutate(across(where(is.numeric), ~ round(.x, 2)))
+  }
 add_table <- 
   function(data){
     
@@ -43,16 +42,16 @@ load_anaylsis_data <-
     feather::read_feather(here("data", {{type}}, {{file_name}}))
   }
 
-  load_data <- 
-    function(type, file_name){
-      if(!type %in% c("raw", "clean", "analysis")) stop('type must be one of "raw", "clean", "analysis"')
-      feather::read_feather(here("data", {{type}}, {{file_name}}))
-    }
-  
-  add_big_labels <- 
-    function(text_size = 14){
-      text = element_text(size = text_size)
-    }
+load_data <- 
+  function(type, file_name){
+    if(!type %in% c("raw", "clean", "analysis")) stop('type must be one of "raw", "clean", "analysis"')
+    feather::read_feather(here("data", {{type}}, {{file_name}}))
+  }
+
+add_big_labels <- 
+  function(text_size = 14){
+    text = element_text(size = text_size)
+  }
 
 save_experiment <-
   function(experiment, workflow_name){

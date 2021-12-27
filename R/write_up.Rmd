@@ -1,0 +1,49 @@
+---
+title: "write_up"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introducing S.P.A.R.K.
+
+If you ever watched an NFL came, you almost surely have heard an commentator say something like "Man, they could really use a spark here". This usually in reference to the losing team, who is in need of an explosive play to gain some momentum and get back in the game. One of the "sparks" that can ignite a team is an incredible kickoff return to give the receiving team great field position, setting the drive up for a higher likelihood of resulting in a field goal or touchdown.
+
+The SPARK model (Special teams Planning A Return of Kickoff) predicts when the receiving team will return a kickoff out of their own endzone *instead* of taking a touchback. 
+
+But why is such a model beneficial? When the receiving team returns a kickoff from their own endzone, they are usually worse off than if they performed a touchback. In turn, a receiving team returning a kickoff from their own endzone puts the kicking team at an advantage. Returning a kickoff from the endzone, instead of taking a touchback, results in several disadvantages for the receiving team:
+    * worse starting field position
+    * lower EPA
+    * higher chance of turnover occurring
+
+Despite the disadvantages, about 20% of kickoffs that reach the endzone are returned out of the endzone by the receiving team. If the kicking team could better anticipate an endzone return occurring, they would be better off by by kicking off into the receiving team's endzone *instead* of kicking it short of the goal line.
+
+This analysis uses the data provided, supplemented with play-by-play data from the NFLfastR package, to develop a predictive model capable of predicting if the receiving team will return a kickoff out of their own endzone with __% accuracy.
+
+# Data Preparation
+
+combined data sources
+created some new features based on previous plays
+
+# Data Exploration
+After eliminating kickoffs that did not reach the endzone, we can start to explore the data
+
+# Model
+
+ -desribe process
+ -key featues
+ 
+# Results
+
+-mention the only input NOT known at time of kickoff is kick length, but that can be controlled by kicker/kicking team
+
+# Limitations
+
+ - kickoffs ay be decided in advance  not a random variable but themselves the outcome of a decision
+ - model may be missing variables, mis-specified
+
+# Conclusions
+
+The model developed here can predict if the receiving team will return a kickoff out of their own endzone with __% accuracy. Hopefully teams can use this to achieve some marginal benefit in their kickoff strategy. (Also want to thank Kaggle for providing the data to let me dive into this question which I've wondered about for years!) 

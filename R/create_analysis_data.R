@@ -37,7 +37,7 @@ pbp <-
   load_data(type = "raw", file_name = "nflfastR_data.feather")
 
 #------------------------------------------------
-# kickoff data ----
+# create kickoff data set ----
 
 # all kickoffs, with some additional variables added around the type and length of return
 
@@ -105,7 +105,7 @@ kickoffs <-
   mutate(prev_endzone_return_attempts = ifelse(is.na(prev_endzone_return_attempts), 0, prev_endzone_return_attempts),
          prev_cuml_endzone_return_yards = ifelse(is.na(prev_cuml_endzone_return_yards), 0, prev_cuml_endzone_return_yards))
 
-# calc avg yards allowed per return at time of kick - not quite right yet
+# calc avg yards allowed per return at time of kick
 return_yards_allowed <-
   kickoffs %>%
   filter(return_type %in% c("Endzone Return", "Field Return")) %>%
@@ -161,57 +161,62 @@ tracking_all <-
               select(nfl_id, game_id, player_team), 
             by = c("nfl_id", "game_id")) 
 
-# get ball position - used to ID when plays stop
-tracking_kickoff_ball <- 
-  tracking_raw %>%
-  filter(display_name == "football") %>% 
-  mutate(tracking_kickoff_id = paste0(game_id, play_id)) %>%
-  filter(tracking_kickoff_id %in% kickoff_ids)
-
-remove(player_team)
-remove(tracking_raw)
-
 # subset the player tracking data to only include kickoffs
 tracking_kickoff <- 
   tracking_all %>% 
   mutate(tracking_kickoff_id = paste0(game_id, play_id)) %>%
   filter(tracking_kickoff_id %in% kickoff_ids)
 
-remove(tracking_all)
-
-# assign each frame to an event; this lets us calculate kickoff hang time, and get avg player speed/acceleration...within each event type
+# remove kicker/punter and assign each frame to an event; 
+# this lets us calculate get avg player speed within each phase of kickoff
 kickoff_events <- 
   tracking_kickoff %>%
-  select(game_id, play_id, frame_id, event) %>%
+  select(game_id, play_id, frame_id, event, player_team, s, position) %>%
+  filter(!event %in% c("penalty_flag", "penalty_accepted"),
+         !position %in% c("K", "P", "QB")) %>%
   mutate(event_phase = case_when(
     event == "None" & frame_id != 1 ~ NA_character_,
     event == "None" & frame_id == 1 ~ "pre_kick",
+    event %in% c("kickoff", "autoevent_kickoff", "onside_kick", "kickoff_play", "drop_kick", "free_kick", "punt", "free_kick_play") ~ "ball_in_air",
+    
+    event %in% c("kick_received", "first_contact", "kick_recovered", "punt_muffed", "kickoff_land", "punt_land", "punt_received", "handoff",
+                 "fumble_offense_recovered", "fumble_defense_recovered", "fumble", "lateral", "pass_outcome_caught", "pass_shovel","shift") ~ "ball_landed",
+    
+    event %in% c("touchback", "out_of_bounds", "fair_catch", "tackle", "punt_downed", "touchdown") ~ "kickoff_end",
     TRUE ~ event)) %>%
   distinct() %>%
   arrange(game_id, play_id, frame_id) %>%
   group_by(game_id, play_id) %>%
   tidyr::fill(event_phase, .direction = "down")
 
-tracking_kickoff <-
-  tracking_kickoff %>%
-  left_join(., kickoff_events %>% select(-event), by = c("game_id", "play_id", "frame_id")) 
+# get cumulative mean speed for each team for each kickoff for the phase when ball is in air
+kickoff_tracking_avg_speed <- 
+  kickoff_events %>%
+  group_by(game_id, play_id, player_team, event_phase) %>%
+  summarise(avg_speed = mean(s, na.rm = T)) %>%
+  filter(!(event_phase %in% c("ball_landed", "kickoff_end", "pre_kick"))) %>%
+  pivot_wider(., names_from = event_phase, values_from = avg_speed) %>%
+  ungroup() %>%
+  group_by(game_id) %>% 
+  arrange(game_id, player_team, play_id) %>%
+  mutate(cuml_avg_ball_in_air_speed = cummean(ball_in_air),
+         prev_cuml_avg_ball_in_air_speed = lag(cuml_avg_ball_in_air_speed, 1)) %>%
+  select(-c(ball_in_air, cuml_avg_ball_in_air_speed))
+  
+# tracking_kickoff <-
+#   tracking_kickoff %>%
+#   left_join(., kickoff_events %>% select(-event), by = c("game_id", "play_id", "frame_id"))
 
 remove(kickoff_events)
-
-kickoff_sequences <-
-  tracking_kickoff %>%
-  select(game_id, play_id, event_phase) %>%
-  group_by(game_id, play_id) %>%
-  distinct() %>% 
-  summarise(event = paste(event_phase, collapse = ', ')) %>%
-  ungroup() %>%
-  group_by(event) %>% 
-  tally(sort = T, name = "kickoff_event_sequences") %>%
-  mutate(freq = kickoff_event_sequences / sum(kickoff_event_sequences))
+remove(player_team)
+remove(tracking_raw)
+remove(tracking_all)
+remove(tracking_kickoff)
 
 #------------------------------------------------
 # scouting data ----
 
+#subset scouting data for only kickoffs
 scouting_kickoff <- 
   PFFScoutingData %>%
   mutate(tracking_kickoff_id = paste0(game_id, play_id)) %>%
@@ -247,7 +252,7 @@ lead_changes <-
   group_by(old_game_id, drive) %>%
   mutate(drive_resulted_in_lead_change = max(lead_change))
 
-# apply indicator to all drives 2018091602, 2018091001, 2018092310, 2019110310, 2018090600, 2018090905 2229
+# apply indicator to all drives
 all_drive_results <-
   pbp %>%
   filter(!play_type_nfl %in% c("GAME_START", "END_QUARTER")
@@ -282,7 +287,6 @@ all_drive_results <-
     prev_play_away_score = lag(total_away_score, 1),
     old_game_id = as.numeric(old_game_id)) %>%
   distinct() %>% 
-  # select(old_game_id, play_id, play_type, fixed_drive_result, fixed_drive_result_adj, fixed_drive_result_adj_adj, prev_play_result, everything()) %>% View
   select(old_game_id, play_id, prev_play_id, prev_play_result, prev_play_home_score, prev_play_away_score) %>%
   left_join(., lead_changes, by = c("old_game_id" = "old_game_id", "prev_play_id" = "play_id")) %>%
   select(-c(prev_play_id)) %>%
@@ -306,7 +310,7 @@ all_drive_results <-
       TRUE ~ prev_play_result
     ))
 
-# filter for just kickoffs
+# add drive results
 pbp_kickoff <- 
   pbp_kickoff %>%
   left_join(., all_drive_results, by = c("old_game_id", "play_id")) %>%
@@ -323,7 +327,6 @@ remove(lead_changes)
 
 write_feather(x = kickoffs_all, path = here("data", "analysis", "kickoff_all_analysis.feather"))
 write_feather(x = kickoffs, path = here("data", "analysis", "kickoff_analysis.feather"))
-write_feather(x = tracking_kickoff, path = here("data", "analysis", "tracking_kickoff_analysis.feather"))
-write_feather(x = tracking_kickoff_ball, path = here("data", "analysis", "tracking_kickoff_ball_analysis.feather"))
+write_feather(x = kickoff_tracking_avg_speed, path = here("data", "analysis", "kickoff_tracking_avg_speed_analysis.feather"))
 write_feather(x = scouting_kickoff, path = here("data", "analysis", "scouting_analysis.feather"))
 write_feather(x = pbp_kickoff, path = here("data", "analysis", "pbp_analysis.feather"))

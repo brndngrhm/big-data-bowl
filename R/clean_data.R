@@ -15,19 +15,6 @@ library(nflfastR)
 
 #------------------------------------------------
 # custom functions ----
-round_numerics <- 
-  function(data){
-    data %>%
-      mutate(across(where(is.numeric), ~ round(.x, 2)))
-  }
-
-add_table <- 
-  function(data){
-    data %>%
-      round_numerics() %>%
-      reactable::reactable(., fullWidth = F, resizable = T, filterable = T, highlight = T, defaultPageSize = 10, 
-                           showSortIcon = T, striped = T, compact = T, defaultExpanded = T)
-  }
 
 load_data <- 
   function(file_name){
@@ -74,7 +61,7 @@ games_raw <-
 skim(games_raw)
 str(games_raw)
 
-# add holidays
+# add holidays; could be interesting to see if holidays have impact on return behavior
 holidays <- 
   c("USChristmasDay", "USColumbusDay", "USInaugurationDay", "USLaborDay", "USThanksgivingDay", "USMLKingsBirthday")
 
