@@ -60,7 +60,11 @@ factor_cols <-
 model_data <- 
   model_data_prep %>%
   mutate(return_type = factor(return_type, levels = c("Endzone Return", "Touchback")),
-         game_date = as.Date(game_date)) %>%
+         game_date = as.Date(game_date),
+         prev_play_lead_change = ifelse(is.na(prev_play_lead_change), 0, prev_play_lead_change),
+         prev_cuml_avg_ball_in_air_speed_kicking_team = 
+           ifelse(is.na(prev_cuml_avg_ball_in_air_speed_kicking_team), 0, prev_cuml_avg_ball_in_air_speed_kicking_team)
+         ) %>%
   mutate_at(factor_cols, factor)
 
 str(model_data)

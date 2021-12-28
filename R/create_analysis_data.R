@@ -238,6 +238,46 @@ pbp_kickoff <-
     TRUE ~ surface)
     )
 
+#get state of certain metrics at each play
+# pbp %>%
+#   select(old_game_id, play_id, drive, posteam, fixed_drive_result) %>%
+#   filter(!is.na(posteam)) %>%
+#   mutate(
+#     turnover_ind = case_when(
+#       fixed_drive_result == "Turnover" ~ 1,
+#       TRUE ~ 0),
+#     drive_failed_ind = case_when(
+#       fixed_drive_result == "Turnover on downs" ~ 1,
+#       TRUE ~ 0),
+#     punt_ind = case_when(
+#       fixed_drive_result == "Punt" ~ 1,
+#       TRUE ~ 0
+#     )) %>% 
+#   ungroup() %>%
+#   group_by(old_game_id, posteam, drive) %>%
+#   arrange(old_game_id, posteam, play_id) %>% 
+#   mutate(
+#     turnover_ind = case_when(
+#       play_id == min(play_id) ~ turnover_ind,
+#       TRUE ~ 0
+#     ),
+#     drive_failed_ind = case_when(
+#       play_id == min(play_id) ~ drive_failed_ind,
+#       TRUE ~ 0
+#     ),
+#     punt_ind = case_when(
+#       play_id == min(play_id) ~ punt_ind,
+#       TRUE ~ 0
+#     )) %>% 
+#   ungroup() %>%
+#   group_by(old_game_id, posteam) %>%
+#   mutate(
+#     cuml_punts = cumsum(punt_ind),
+#     cuml_turnovers = cumsum(turnover_ind),
+#     cuml_drive_fails = cumsum(drive_failed_ind)
+#   ) %>% 
+#   select(-c(fixed_drive_result, drive, ends_with("ind")))
+  
 # create indicator for when a scoring drive results in a lead change
 lead_changes <-
   pbp %>%

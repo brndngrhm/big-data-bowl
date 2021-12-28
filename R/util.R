@@ -1,4 +1,4 @@
-
+library(reactable)
 options(reactable.theme = reactableTheme(
   color = "hsl(233, 9%, 87%)",
   backgroundColor = "hsl(233, 9%, 19%)",
