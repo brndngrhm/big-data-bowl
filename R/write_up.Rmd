@@ -46,4 +46,4 @@ After eliminating kickoffs that did not reach the endzone, we can start to explo
 
 # Conclusions
 
-The model developed here can predict if the receiving team will return a kickoff out of their own endzone with __% accuracy. Hopefully teams can use this to achieve some marginal benefit in their kickoff strategy. (Also want to thank Kaggle for providing the data to let me dive into this question which I've wondered about for years!) 
+The model developed here can predict if the receiving team will return a kickoff out of their own endzone with __% accuracy. Hopefully teams can use this to achieve some marginal benefit in their kickoff strategy. (Also I want to thank Kaggle for providing the data to let me dive into this question which I've wondered about for years!) 
