@@ -1,181 +1,244 @@
-
-
+library(feather)
 library(tidyverse)
-library(lubridate)
-library(stringr)
-library(reactable)
-library(highcharter)
 library(purrr)
 library(here)
-library(readr)
-library(feather)
-library(skimr)
-library(janitor)
-library(timeDate)
-library(nflfastR)
 library(tidymodels)
 library(discrim)
+library(baguette)
 library(workflowsets)
+library(finetune)
 library(doParallel)
+library(ggmosaic)
+library(corrr)
 
 options(tidymodels.dark = TRUE) 
 
 source(here("R", "util.R"))
-
 
 #------------------------------------------------
 # load data ----
 kickoffs_model <- 
   read_feather(path = here("data", "model", "kickoffs_model.feather"))
 
-#------------------------------------------------
-# kickoff data ----
-kickoffs <- 
-  plays %>% 
-  filter(special_teams_play_type == "Kickoff",
-         special_teams_result %in% c("Touchback", "Return"),
-         is.na(penalty_yards)
-         # game_id == "2018090600"
-  ) %>% 
-  mutate(
-    return_start = 100 - (yardline_number + kick_length),
-    return_type = case_when(
-      special_teams_result == "Return" & return_start <= 0 ~ "endzone_return",
-      special_teams_result == "Return" & return_start > 0 ~ "field_return",
-      special_teams_result == "Touchback" ~ "touchback",
-      TRUE ~ "FROG")
-  ) %>%
-  filter(return_type %in% c("endzone_return", "touchback")) %>%
-  left_join(., games %>% mutate(teams = paste(home_team_abbr, visitor_team_abbr, sep = " "),
-                                     game_tod = case_when(
-                                       hour(game_time_eastern) == 9 ~ 'morning',
-                                       hour(game_time_eastern) %in% c(12, 13, 15) ~ 'afternoon',
-                                       hour(game_time_eastern) %in% c(16, 17) ~ 'late_afternoon',
-                                       hour(game_time_eastern) == 20 ~ 'night',
-                                       hour(game_time_eastern) == 22 ~ 'late_night',
-                                       TRUE ~ "FROG")
-                                     ), by = c("game_id")) %>% 
-  rowwise() %>%
-  mutate(recieving_team = ifelse(trimws(str_remove(teams, possession_team)) == trimws(visitor_team_abbr), "visiting_team", "home_team"),
-         recieving_team_score_diff = ifelse(recieving_team == visitor_team_abbr,
-                                            pre_snap_visitor_score - pre_snap_home_score, 
-                                            pre_snap_home_score - pre_snap_visitor_score)) %>%
-  select(-c(down, yards_to_go, possession_team, special_teams_play_type, kicker_id, kick_blocker_id, yardline_side, 
-            yardline_number, starts_with("penalty"), starts_with("pre"), pass_result, kick_length, kick_return_yardage, play_result, 
-            absolute_yardline_number, teams, special_teams_result, play_description)) %>%
-  # left_join(., players %>% select(-c(display_name)), by = c("returner_id" = "nfl_id")) %>%
-  # mutate(game_day_age = as.numeric(as.Date(game_date) - birth_date)/365) %>%
-  # select(-c(birth_date, current_age)) %>%
-  left_join(., nflfastR_data %>% 
-              mutate(old_game_id = as.numeric(old_game_id)) %>%
-              select(old_game_id, play_id, half_seconds_remaining, game_seconds_remaining, game_half, 
-                     home_timeouts_remaining, away_timeouts_remaining, 
-                     temp, wind, surface), by = c("game_id" = "old_game_id", "play_id" = "play_id")) %>% 
-  mutate(recieving_team_timeouts_remaining = ifelse(recieving_team == visitor_team_abbr, away_timeouts_remaining, home_timeouts_remaining)) %>%
-  select(-c(home_timeouts_remaining, away_timeouts_remaining, stadium)) %>%
-  distinct()
+# kickoffs_model %>% add_table()
+# 
+# str(kickoffs_model)
 
+#------------------------------------------------
+# Explore model data ----
+
+# kickoffs_model %>%
+#   group_by(return_type) %>%
+#   tally() %>%
+#   mutate(freq = n/ sum(n)) %>%
+#   ggplot(., aes(x = return_type, y = n, label = paste(round(freq*100, 2), "%"))) + 
+#   geom_col(fill = c("cornflowerblue", "tomato"), alpha = .75) + 
+#   geom_label() + 
+#   theme_minimal() + 
+#   labs(x = "", y = "Count", title = "80% of Endzone Kickoffs Result in a Touchback")
+# 
+# numeric_cols <- 
+#   kickoffs_model %>% 
+#   select(where(is.numeric)) %>%
+#   names
+# 
+# kickoffs_model %>% 
+#   select(where(is.numeric)) %>%
+#   select(-ends_with("id")) %>%
+#   correlate() %>%
+#   network_plot()
+# 
+# numeric_boxplots <-
+#   function(col_name){
+#     
+#     # col_name <- "recieving_team_score_diff"
+#       
+#     kickoffs_model %>%
+#       select(return_type, one_of({{col_name}})) %>%
+#       rename(predictor = 2) %>%
+#       ggplot(., aes(x = return_type, y = predictor, fill = return_type)) + 
+#       geom_jitter(alpha = .3, color = 'gray') + 
+#       geom_boxplot(alpha = .75, outlier.shape = NA) + 
+#       coord_flip() + 
+#       theme_minimal() + 
+#       scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
+#       labs(x = "", y = "", title = paste("Return type vs", {{col_name}}))
+#   }
+# 
+# map(numeric_cols, ~numeric_boxplots(.x))
+# 
+# factor_cols <- 
+#   kickoffs_model %>% 
+#   select(-return_type) %>%
+#   select(where(is.factor)) %>%
+#   names
+# 
+# factor_bar_plots <-
+#   function(col_name){
+#     
+#     kickoffs_model %>%
+#       select(return_type, one_of({{col_name}})) %>%
+#       rename(predictor = 2) %>%
+#       group_by(predictor, return_type) %>%
+#       tally() %>%
+#       mutate(freq = n / sum(n)) %>%
+#       ggplot(., aes(x = reorder(predictor, -freq), y = freq, fill = return_type, label = paste0(paste0(round(freq*100, 2), "%"), "\n(n = ", n, ")"))) + 
+#       geom_col(position = 'dodge', alpha = .75) + 
+#       geom_text(position = position_dodge(width = .9), vjust = -0.5) + 
+#       theme_minimal() + 
+#       scale_y_continuous(labels = scales::percent, breaks = seq(0, 1, .10)) + 
+#       scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
+#       labs(x = "", y = "Count", title = "80% of Endzone Kickoffs Result in a Touchback") + 
+#       labs(x = "", y = "", title = paste("Return type vs", {{col_name}}))
+#   }
+# 
+# map(factor_cols, ~factor_bar_plots(.x))
+# 
+# factor_mosaic_plots <-
+#   function(col_name){
+#     
+#     kickoffs_model %>%
+#       select(return_type, one_of({{col_name}})) %>%
+#       rename(predictor = 2) %>%
+#       group_by(predictor, return_type) %>%
+#       tally() %>%
+#       mutate(freq = n / sum(n)) %>%
+#       ggplot(., aes(label = paste0(paste0(round(freq*100, 2), "%"), "\n(n = ", n, ")"))) +
+#       geom_mosaic(aes(x = product(predictor, return_type), fill = predictor, weight = freq), na.rm = T, show.legend = F,  offset = 0.001) + 
+#       theme_minimal() + 
+#       labs(x = "", y = "Count", title = "80% of Endzone Kickoffs Result in a Touchback") + 
+#       labs(x = "", y = "", title = paste("Return type vs", {{col_name}}))
+#   }
+# 
+# map(factor_cols, ~factor_mosaic_plots(.x))
 
 #------------------------------------------------
 # model_prep ----
 
-kickoffs <- 
-  kickoffs %>%
-  select(-c(game_clock, game_time_eastern, home_team_abbr, visitor_team_abbr, game_datetime, recieving_team, temp, wind, returner_id)) %>%
-  mutate(return_type = factor(return_type, levels = c("endzone_return", "touchback")),
-         game_date = as.Date(game_date),
-         quarter = as.factor(quarter),
-         season = as.factor(season),
-         game_tod = as.factor(game_tod),
-         primetime_ind = as.factor(primetime_ind),
-         overseas_game_ind = as.factor(overseas_game_ind),
-         week = as.factor(week),
-         game_hour = as.factor(game_hour),
-         recieving_team_timeouts_remaining = as.factor(recieving_team_timeouts_remaining),
-         holiday = as.factor(holiday),
-         half_mins_remaining = half_seconds_remaining / 60,
-         game_minsremaining = game_seconds_remaining / 60,
-         game_half = as.factor(game_half),
-         quarter = as.factor(quarter),
-         season = as.factor(season),
-         surface = as.factor(surface)
-  ) %>%
-  select(-c(half_seconds_remaining, game_seconds_remaining)) %>%
-  ungroup() 
-
-# str(kickoffs)
-# skimr::skim_to_list(kickoffs)
-
+# split data
 set.seed(1504)
 splits <- 
-  rsample::initial_split(kickoffs, strata = return_type)
+  rsample::initial_split(kickoffs_model, strata = return_type)
 training <- 
   training(splits)
 testing <- 
   testing(splits)
 
+# create folds
 folds <-
-  rsample::bootstraps(training, times = 40, strata = return_type)
+rsample::bootstraps(training, times = 40, strata = return_type)
 
-folds <-
-  rsample::vfold_cv(training, v = 20, strata = return_type)
+# folds <-
+#   rsample::vfold_cv(training, v = 20, strata = return_type)
 
+# define metrics
+kickoff_metrics <- 
+  metric_set(accuracy, sens, spec, roc_auc)
+
+# specify recipe
 recipe <- 
   recipe(return_type ~ ., data = training) %>%
   update_role(game_id, play_id, new_role = "ID Variable") %>%
-  step_nzv(all_predictors(), -game_tod) %>%
+  step_nzv(all_predictors()) %>%
   step_date(game_date, features = c("month", "dow")) %>%
   step_rm(game_date) %>%
-  # step_unknown(all_nominal_predictors(), -all_outcomes()) %>%
-  # step_novel(all_nominal_predictors(), -all_outcomes()) %>%
-  step_YeoJohnson(all_numeric_predictors(),  -month, -day_nm) %>%
-  step_normalize(all_numeric_predictors(), -month, -day_nm) %>%
+  step_unknown(all_nominal_predictors(), -all_outcomes()) %>%
+  step_novel(all_nominal_predictors(), -all_outcomes()) %>%
+  step_YeoJohnson(all_numeric_predictors()) %>%
+  step_normalize(all_numeric_predictors()) %>%
   step_dummy(all_nominal_predictors(), -all_outcomes()) %>%
   themis::step_smote(all_outcomes(), skip = TRUE)
 
-# juice(prep(recipe)) %>% View
+# juice(
+#   prep(recipe)
+#   ) %>% View
 
 #------------------------------------------------
-# model ----
+# model sepcs ----
 glm_spec <- 
-  logistic_reg(penalty = tune(),
-               mixture = tune()) %>% 
-  set_engine("glm")
+  logistic_reg(
+    penalty = tune(),
+    mixture = tune()) %>% 
+  set_engine("glmnet")
+
+# pls_spec <- 
+#   pls(
+#     predictor_prop = tune(), 
+#     num_comp = tune()) %>%
+#   set_engine("mixOmics") %>%
+#   set_mode("classification")
 
 tree_spec <- 
   decision_tree(
     cost_complexity = tune(),
     tree_depth = tune(),
     min_n = tune()
-  )%>% 
+  ) %>% 
   set_engine("rpart") %>% 
+  set_mode("classification")
+
+bag_tree_spec <- 
+  bag_tree(
+    tree_depth = tune(),
+    min_n = tune(),
+    class_cost = tune()
+  ) %>% 
+  set_engine("rpart") %>% 
+  set_mode("classification")
+
+boost_tree_spec <-
+  boost_tree(
+    mtry = tune(),
+    trees = tune(),
+    min_n = tune(),
+    tree_depth = tune(),
+    learn_rate = tune(),
+    loss_reduction = tune(),
+    sample_size = tune(),
+    stop_iter = tune()
+  ) %>% 
+  set_engine("xgboost") %>% 
+  set_mode("classification")
+
+rand_forest_spec <- 
+  rand_forest(
+    trees = 1000,
+    min_n = tune(), 
+    mtry = tune()
+    ) %>% 
+  set_engine("ranger") %>% 
   set_mode("classification")
 
 mars_spec <- 
   mars(
     num_terms = tune(),
     prod_degree = tune(),
-    prune_method = tune()) %>% 
+    prune_method = tune()
+    ) %>% 
   set_engine("earth") %>% 
   set_mode("classification")
 
-mars_disc_spec <- 
-  discrim_flexible(prod_degree = tune()) %>% 
-  set_engine("earth")
-
-cart_spec <- 
-  decision_tree(cost_complexity = tune(), 
-                min_n = tune()) %>% 
-  set_engine("rpart") %>% 
+bag_mars_spec <- 
+  bag_mars(
+    num_terms = tune(),
+    prod_degree = tune(),
+    prune_method = tune()
+  ) %>% 
+  set_engine("earth") %>% 
   set_mode("classification")
+
+mars_discrim_spec <- 
+  discrim_flexible(
+    prod_degree = tune()
+    ) %>% 
+  set_engine("earth")
 
 mlp_spec <- 
   mlp(
     hidden_units = tune(),
     penalty = tune(),
-    dropout = tune(),
-    epochs = tune(),
-    activation = tune()) %>% 
+    epochs = tune()
+    )%>% 
   set_engine("nnet") %>% 
   set_mode("classification")
 
@@ -194,29 +257,64 @@ svm_spec <-
   set_engine("kernlab") %>% 
   set_mode("classification")
 
-rand_forest_spec <- 
-  rand_forest(
-    trees = 1000,
-    min_n = tune()) %>% 
-  set_engine("ranger") %>% 
+lin_discrim_spec <- 
+  discrim_linear(
+    penalty = tune(),
+    regularization_method = tune()) %>% 
+  set_engine("MASS") %>% 
   set_mode("classification")
+
+knn_spec <- 
+  nearest_neighbor(
+    neighbors = tune(),
+    weight_func = tune(),
+    dist_power = tune()
+  ) %>% 
+  set_engine("kknn") %>% 
+  set_mode("classification")
+
+discrim_reg_spec <- 
+  discrim_regularized(
+    frac_common_cov = tune(),
+    frac_identity = tune()) %>% 
+  set_engine("klaR") %>% 
+  set_mode("classification")
+
+#------------------------------------------------
+# workflowsets ----
+
+update_mtry <-
+  function(workflowset, workflow){
+    
+    workflowset %>%
+      workflowsets::extract_workflow({{workflow}}) %>%
+      parameters() %>%
+      update(mtry = mtry(c(1, 20)))
+  }
 
 all_workflows <- 
   workflow_set(
     cross = TRUE,
     preproc = list(recipe = recipe),
-    models = list(mars = mars_spec, 
-                  mars_discrim = mars_disc_spec,
-                  decision_tree = tree_spec,
-                  glm = glm_spec,
-                  cart = cart_spec,
-                  # nnet = mlp_spec,
-                  naive_bayes = bayes_spec
-                  # svm = svm_spec,
-                  # random_forest = rand_forest_spec
-    )
-  )
-
+    models = list(
+      bag_mars = bag_mars_spec,
+      # bag_tree = bag_tree_spec, bad performance
+      # naive_bayes = bayes_spec, bad performance
+      boost_tree = boost_tree_spec,
+      discrim_reg = discrim_reg_spec,
+      glm = glm_spec,
+      # knn = knn_spec, #issue - model doesn't work
+      mars_discrim = mars_discrim_spec,
+      mars = mars_spec,
+      nnet = mlp_spec,
+      random_forest = rand_forest_spec, #issue - model doesn't work
+      svm = svm_spec,
+      decision_tree = tree_spec
+      )
+  ) %>%
+  option_add(param_info = update_mtry(., "recipe_random_forest"), id = "recipe_random_forest") %>%
+  option_add(param_info = update_mtry(., "recipe_boost_tree"), id = "recipe_boost_tree")
+  
 grid_ctrl <-
   control_grid(
     save_pred = TRUE,
@@ -225,39 +323,54 @@ grid_ctrl <-
     verbose = TRUE
   )
 
+race_ctrl <-
+  control_race(
+    save_pred = TRUE,
+    verbose = TRUE,
+    allow_par = TRUE,
+    parallel_over = "everything"
+  )
+
 cl <- 
   makeCluster(10)
 
 doParallel::registerDoParallel(cl)
 
+tictoc::tic()
 results <- 
   all_workflows %>%
   workflow_map(
     seed = 1503,
+    control = grid_ctrl,
+    fn = "tune_grid",
+    # control = race_ctrl,
+    # fn = "tune_race_anova",
     resamples = folds,
-    grid = 25,
+    grid = 10,
     verbose = T,
-    metrics = metric_set(accuracy, spec, sens, roc_auc),
-    control = grid_ctrl
+    metrics = kickoff_metrics
   )
-
+tictoc::toc()
 
 stopCluster(cl)
 
-workflowsets::rank_results(results, rank_metric = "roc_auc", select_best = T)
-
-autoplot(
-  results,
-  rank_metric = "roc_auc",  # <- how to order models
-  metric = "roc_auc",       # <- which metric to visualize
-  select_best = TRUE     # <- one point per workflow
-)
-
-sautoplot(
-  results  %>% filter(!wflow_id %in% c("recipe_svm", "recipe_random_forest")),
-  rank_metric = "accuracy",  # <- how to order models
-  metric = "accuracy",       # <- which metric to visualize
-  select_best = TRUE     # <- one point per workflow
-)
-
-results %>% unnest(result) %>% unnest(.notes) %>% select(wflow_id, .notes)
+# # check notes
+# results %>%
+#   unnest(result) %>%
+#   unnest(.notes) %>%
+#   select(wflow_id, .notes) %>% View
+#
+# # results quick check
+# rank_results(results, "accuracy", select_best = "TRUE")
+#           
+# #------------------------------------------------
+# # save experiment ----
+# 
+# workflowset_experiment <-
+#   tibble(workflows = list(results),
+#          splits = list(splits))
+# 
+# save_experiment(experiment = workflowset_experiment,
+#                 workflow_name = "v0.0.3")
+# 
+# stopCluster(cl)
