@@ -37,12 +37,12 @@ kickoffs_model <-
 #   theme_minimal() + 
 #   labs(x = "", y = "Count", title = "80% of Endzone Kickoffs Result in a Touchback")
 # 
-# numeric_cols <- 
-#   kickoffs_model %>% 
+# numeric_cols <-
+#   kickoffs_model %>%
 #   select(where(is.numeric)) %>%
 #   names
 # 
-# kickoffs_model %>% 
+# kickoffs_model %>%
 #   select(where(is.numeric)) %>%
 #   select(-ends_with("id")) %>%
 #   correlate() %>%
@@ -50,45 +50,45 @@ kickoffs_model <-
 # 
 # numeric_boxplots <-
 #   function(col_name){
-#     
+# 
 #     # col_name <- "recieving_team_score_diff"
-#       
+# 
 #     kickoffs_model %>%
 #       select(return_type, one_of({{col_name}})) %>%
 #       rename(predictor = 2) %>%
-#       ggplot(., aes(x = return_type, y = predictor, fill = return_type)) + 
-#       geom_jitter(alpha = .3, color = 'gray') + 
-#       geom_boxplot(alpha = .75, outlier.shape = NA) + 
-#       coord_flip() + 
-#       theme_minimal() + 
-#       scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
+#       ggplot(., aes(x = return_type, y = predictor, fill = return_type)) +
+#       geom_jitter(alpha = .3, color = 'gray') +
+#       geom_boxplot(alpha = .75, outlier.shape = NA) +
+#       coord_flip() +
+#       theme_minimal() +
+#       scale_fill_manual(values = c("cornflowerblue", "tomato")) +
 #       labs(x = "", y = "", title = paste("Return type vs", {{col_name}}))
 #   }
 # 
 # map(numeric_cols, ~numeric_boxplots(.x))
 # 
-# factor_cols <- 
-#   kickoffs_model %>% 
+# factor_cols <-
+#   kickoffs_model %>%
 #   select(-return_type) %>%
-#   select(where(is.factor)) %>%
+#   select(where(is.factor) | where(is.character)) %>%
 #   names
 # 
 # factor_bar_plots <-
 #   function(col_name){
-#     
+# 
 #     kickoffs_model %>%
 #       select(return_type, one_of({{col_name}})) %>%
 #       rename(predictor = 2) %>%
 #       group_by(predictor, return_type) %>%
 #       tally() %>%
 #       mutate(freq = n / sum(n)) %>%
-#       ggplot(., aes(x = reorder(predictor, -freq), y = freq, fill = return_type, label = paste0(paste0(round(freq*100, 2), "%"), "\n(n = ", n, ")"))) + 
-#       geom_col(position = 'dodge', alpha = .75) + 
-#       geom_text(position = position_dodge(width = .9), vjust = -0.5) + 
-#       theme_minimal() + 
-#       scale_y_continuous(labels = scales::percent, breaks = seq(0, 1, .10)) + 
-#       scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
-#       labs(x = "", y = "Count", title = "80% of Endzone Kickoffs Result in a Touchback") + 
+#       ggplot(., aes(x = reorder(predictor, -freq), y = freq, fill = return_type, label = paste0(paste0(round(freq*100, 2), "%"), "\n(n = ", n, ")"))) +
+#       geom_col(position = 'dodge', alpha = .75) +
+#       geom_text(position = position_dodge(width = .9), vjust = -0.5) +
+#       theme_minimal() +
+#       scale_y_continuous(labels = scales::percent, breaks = seq(0, 1, .10)) +
+#       scale_fill_manual(values = c("cornflowerblue", "tomato")) +
+#       labs(x = "", y = "Count", title = "80% of Endzone Kickoffs Result in a Touchback") +
 #       labs(x = "", y = "", title = paste("Return type vs", {{col_name}}))
 #   }
 # 
@@ -133,7 +133,7 @@ rsample::bootstraps(training, times = 40, strata = return_type)
 
 # define metrics
 kickoff_metrics <- 
-  metric_set(accuracy, sens, spec, roc_auc)
+  metric_set(accuracy, roc_auc, mn_log_loss)
 
 # specify recipe
 recipe <- 
@@ -160,13 +160,6 @@ glm_spec <-
     penalty = tune(),
     mixture = tune()) %>% 
   set_engine("glmnet")
-
-# pls_spec <- 
-#   pls(
-#     predictor_prop = tune(), 
-#     num_comp = tune()) %>%
-#   set_engine("mixOmics") %>%
-#   set_mode("classification")
 
 tree_spec <- 
   decision_tree(
@@ -298,16 +291,16 @@ all_workflows <-
     preproc = list(recipe = recipe),
     models = list(
       bag_mars = bag_mars_spec,
-      # bag_tree = bag_tree_spec, bad performance
-      # naive_bayes = bayes_spec, bad performance
+      bag_tree = bag_tree_spec,
+      naive_bayes = bayes_spec,
       boost_tree = boost_tree_spec,
       discrim_reg = discrim_reg_spec,
       glm = glm_spec,
-      # knn = knn_spec, #issue - model doesn't work
+      # knn = knn_spec, 
       mars_discrim = mars_discrim_spec,
       mars = mars_spec,
       nnet = mlp_spec,
-      random_forest = rand_forest_spec, #issue - model doesn't work
+      random_forest = rand_forest_spec,
       svm = svm_spec,
       decision_tree = tree_spec
       )
@@ -323,14 +316,6 @@ grid_ctrl <-
     verbose = TRUE
   )
 
-race_ctrl <-
-  control_race(
-    save_pred = TRUE,
-    verbose = TRUE,
-    allow_par = TRUE,
-    parallel_over = "everything"
-  )
-
 cl <- 
   makeCluster(10)
 
@@ -343,8 +328,6 @@ results <-
     seed = 1503,
     control = grid_ctrl,
     fn = "tune_grid",
-    # control = race_ctrl,
-    # fn = "tune_race_anova",
     resamples = folds,
     grid = 10,
     verbose = T,
@@ -359,18 +342,16 @@ stopCluster(cl)
 #   unnest(result) %>%
 #   unnest(.notes) %>%
 #   select(wflow_id, .notes) %>% View
-#
-# # results quick check
-# rank_results(results, "accuracy", select_best = "TRUE")
-#           
+
+# results quick check
+rank_results(results, "mn_log_loss", select_best = "TRUE")
+          
 # #------------------------------------------------
-# # save experiment ----
+# save experiment ----
 # 
-# workflowset_experiment <-
-#   tibble(workflows = list(results),
-#          splits = list(splits))
-# 
-# save_experiment(experiment = workflowset_experiment,
-#                 workflow_name = "v0.0.3")
-# 
-# stopCluster(cl)
+workflowset_experiment <-
+  tibble(workflows = list(results),
+         splits = list(splits))
+
+save_experiment(experiment = workflowset_experiment,
+                workflow_name = "v0.0.5")

@@ -1,6 +1,4 @@
-#
-# ABOUT: This script analyzes & compares various medical elective LOS models. Should be run as `Source as Local Job`. change working directory to root in dialogue box, copy results to global environment.
-#
+
 # -------------------------------------------------------
 # load packages and source functions ----
 
@@ -14,10 +12,11 @@ library(purrr)
 library(furrr)
 library(doParallel)
 library(stringr)
-library(rocqi)
 library(htmlwidgets)
 library(htmltools)
 library(stringr)
+library(forcats)
+library(ggrepel)
 
 source(here("R", "util.R"))
 
@@ -26,7 +25,7 @@ source(here("R", "util.R"))
 
 # load model workflowset
 class_workflows <- 
-  readRDS(here::here("R", "experiments", "2021_12_26_1701_v0.0.2.rds"))
+  readRDS(here::here("R", "experiments", "2021_12_28_2208_v0.0.5.rds"))
 
 splits <- 
   class_workflows %>% 
@@ -43,18 +42,12 @@ workflow_models <-
   .[[1]] %>%
   .[[1]]
 
-workflow_models %>%
-  unnest(info) %>%
-  select(workflow)%>%
-  .[[1]] %>%
-  .[[1]]
-
 # -------------------------------------------------------
 # rank models ----
 
 rank_results(workflow_models, "accuracy", select_best = "TRUE")
-rank_results(workflow_models, "sens", select_best = "TRUE")
-rank_results(workflow_models, "spec", select_best = "TRUE")
+rank_results(workflow_models, "mn_log_loss", select_best = "TRUE")
+# rank_results(workflow_models, "spec", select_best = "TRUE")
 rank_results(workflow_models, "roc_auc", select_best = "TRUE")
 
 # rank table
@@ -65,43 +58,63 @@ rank_table <-
   reactable(., sortable = T, searchable = T, filterable = T)
 
 title <-
-  glue::glue("Top {cutoff} Regression Models per Metric ({format(nrow(collect_metrics(workflow_models, summarize = FALSE))/4, big.mark = ',')} models evaluated)")
+  glue::glue(
+    "Top {cutoff} Regression Models per Metric ({format(nrow(collect_metrics(workflow_models, summarize = FALSE))/4, big.mark = ',')} models evaluated)")
 
 htmlwidgets::prependContent(rank_table, 
                             h2(class = "title", title))
 
+
+get_class_model_rank(workflow_models, rank_cutoff = 1, type = "wide") %>%
+  reactable(., sortable = T, searchable = T, filterable = T)
+
+get_class_model_rank(workflow_models, rank_cutoff = 1, type = "wide") %>%
+  select(model, ends_with("rank"))
+
 # -------------------------------------------------------
 # individual metric plots ----
 
-spec_plot <- 
-  autoplot(workflow_models, metric = "spec", select_best = TRUE) + labs(x = "Rank", title = "Models ranked by Specificity")
-sens_plot <- 
-  autoplot(workflow_models, metric = "sens", select_best = TRUE) + labs(x = "Rank", title = "Models ranked by Sensitivity")
+mn_log_loss_plot <- 
+  autoplot(workflow_models, metric = "mn_log_loss", select_best = TRUE) + labs(x = "Rank", title = "Models ranked by mn_log_loss") + 
+  geom_text_repel(aes(label = model), nudge_y = .005, show.legend = FALSE) + theme(legend.position = "none")
+# sens_plot <- 
+#   autoplot(workflow_models, metric = "sens", select_best = TRUE) + labs(x = "Rank", title = "Models ranked by Sensitivity") + 
+#   geom_text_repel(aes(label = model), nudge_y = .005, show.legend = FALSE) + theme(legend.position = "none")
 acc_plot <- 
-  autoplot(workflow_models, metric = "accuracy", select_best = TRUE) + labs(x = "Rank", title = "Models ranked by Accuracy")
+  autoplot(workflow_models, metric = "accuracy", select_best = TRUE) + labs(x = "Rank", title = "Models ranked by Accuracy") + 
+  geom_text_repel(aes(label = model), nudge_y = -.005, show.legend = FALSE) + theme(legend.position = "none")
 roc_auc_plot <-
-  autoplot(workflow_models, metric = "roc_auc", select_best = TRUE) + labs(x = "Rank", title = "Models ranked by ROC_AUC")
+  autoplot(workflow_models, metric = "roc_auc", select_best = TRUE) + labs(x = "Rank", title = "Models ranked by ROC_AUC") + 
+  geom_text_repel(aes(label = model), nudge_y = -.005, show.legend = FALSE) + theme(legend.position = "none")
 
-ggpubr::ggarrange(acc_plot, sens_plot, spec_plot, roc_auc_plot, ncol = 2, nrow = 2)
+ggpubr::ggarrange(acc_plot, mn_log_loss_plot, roc_auc_plot, ncol = 2, nrow = 2)
 
 # -------------------------------------------------------
 # ROC AUC curves ----
 
-workflow_models %>%
-  unnest(result) %>%
-  unnest(.predictions) %>%
-  inner_join(., rank_results(workflow_models, "roc_auc", select_best = "TRUE"), by = c("wflow_id", ".config")) %>%
-  dplyr::select(wflow_id, return_type, starts_with(".pred")) %>%
-  distinct() %>%
-  group_by(wflow_id) %>%
+roc_auc_vals <- 
+  rank_results(workflow_models, "roc_auc", select_best = "TRUE") %>%
+  filter(.metric == "roc_auc") %>%
+  select(wflow_id, model, mean_value = mean)
+
+collect_predictions(workflow_models, select_best = TRUE, metric = "roc_auc") %>%
+  group_by(model, wflow_id) %>%
   roc_curve(., return_type, `.pred_Endzone Return`) %>%
-  ggplot(aes(x = 1 - specificity, y = sensitivity, color = wflow_id)) +
+  inner_join(., roc_auc_vals, by = c("wflow_id", "model")) %>%
+  mutate(label = paste(model, round(mean_value, 2)),
+         model = as.factor(model)) %>%
+  arrange(desc(mean_value)) %>%
+  ggplot(aes(x = 1 - specificity, y = sensitivity, color = fct_reorder(model, -mean_value))) +
   geom_path() +
   geom_abline(lty = 3) +
   coord_equal() +
-  facet_wrap(.~wflow_id) +
-  theme(legend.position = "none") +
-  labs(title = "ROC AUC Curves")
+  facet_wrap(. ~ fct_reorder(label, -mean_value)) +
+  theme_minimal() + 
+  theme(legend.position = "none",
+        text = add_big_labels(text_size = 14)) +
+  labs(title = "ROC AUC Curves for Candidate Models",
+       x = "1-Specificity (False Positive Rate)",
+       y = "Sensitivity (True Positive Rate")
 
 # -------------------------------------------------------
 # combined metric plots ----
@@ -125,30 +138,28 @@ get_class_model_rank(workflow_models, rank_cutoff = cutoff, type = "long")  %>%
 # feature importance ----
 best_results <- 
   workflow_models %>% 
-  extract_workflow_set_result("recipe_boost_tree") %>% 
-  select_best(metric = "roc_auc")
+  extract_workflow_set_result("recipe_random_forest") %>% 
+  select_best(metric = "mn_log_loss")
 
 library(vip)
 workflow_models %>% 
-  extract_workflow("recipe_boost_tree") %>% 
+  extract_workflow("recipe_random_forest") %>% 
   finalize_workflow(best_results) %>%
   fit(data = training) %>%
   extract_fit_parsnip() %>%
   vip(geom = "point", num_features = 15)
-
-xgb.importance(model = bst)
 
 # -------------------------------------------------------
 # model finalize ----
 
 best_results <- 
   workflow_models %>% 
-  extract_workflow_set_result("rec_glm") %>% 
-  select_best(metric = "roc_auc")
+  extract_workflow_set_result("recipe_random_forest") %>% 
+  select_best(metric = "mn_log_loss")
 
 test_results <- 
   workflow_models %>% 
-  extract_workflow("rec_glm") %>% 
+  extract_workflow("recipe_random_forest") %>% 
   finalize_workflow(best_results) %>% 
   last_fit(split = splits)
 
@@ -156,9 +167,9 @@ collect_metrics(test_results)
 
 bind_cols(test_results %>% 
             collect_predictions() %>% dplyr::select(.pred_class),
-          test) %>%
-  dplyr::select(target, .pred_class) %>%
-  group_by(target, .pred_class) %>%
+          testing(splits)) %>%
+  dplyr::select(return_type, .pred_class) %>%
+  group_by(return_type, .pred_class) %>%
   tally() %>%
   mutate(freq = n / sum(n)) %>%
   dplyr::select(-n) %>%
@@ -167,11 +178,11 @@ bind_cols(test_results %>%
 
 bind_cols(test_results %>% 
             collect_predictions() %>% dplyr::select(.pred_class),
-          test) %>%
-  group_by(target, .pred_class) %>%
+          testing(splits)) %>%
+  group_by(return_type, .pred_class) %>%
   tally() %>%
   mutate(freq = n / sum(n)) %>%
-  ggplot(aes(x = target, y = .pred_class, size = n)) + 
+  ggplot(aes(x = return_type, y = .pred_class, size = n)) + 
   geom_abline(col = "green", lty = 2) + 
   geom_point(alpha = 0.5) + 
   # coord_obs_pred() + 
