@@ -27,6 +27,8 @@ It seems like the best alternative would be to take the touchback, and yet about
 * worse starting field position
 * lower EPA
 * higher chance of turnover occurring
+
+![](https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/img/kickoff_bar.svg?token=ADFAP2MKGO4JDQ2RQACSSBLBZTQXA)
     
 ---- INSERT  SOME PLOTS HERE -----
 
