@@ -22,11 +22,9 @@ This analysis uses the data provided, supplemented with play-by-play data from t
 
 ## Data Preparation & Feature Engineering
 
-In thinking about what might cause a team to run a kickoff out of the endzone, I attempt to create some features to help capture the state of the game just prior to the kickoff. Data used to develop the model is a combination of the provided data sets, as well as play-by-play data from the `nflfastR` package. The play-by-play data is used to generate features that describe certain aspects of the game *just prior* to each kickoff. It's important to only use data available at the time of each kickoff so as to not introduce data leakage into the model
+In thinking about what might cause a team to run a kickoff out of the endzone, I attempt to create some features to help capture the state of the game just prior to the kickoff. Data used to develop the model is a combination of the provided data sets, as well as play-by-play data from the `nflfastR` package. The play-by-play data is used to generate features that describe certain aspects of the game *just prior* to each kickoff. The only predictors not known prior to kickoff are kickoff-direction and kickoff-depth (i.e. how far into the endzone the ball is kicked), however, these are variables that can be somewhat controlled by the kicking team.
 
 The full set of features used in the model are:
-
- For example, some predictors in the model are:
 
  * did the prior drive result in a score? 
  * and if so did that score result in a lead change? 
@@ -35,11 +33,12 @@ The full set of features used in the model are:
 
 ## Model
 
-The model works at the play-level and takes advantage of previous nforation just before kickoff.
+Several model were developed, each tuned using bootstrap resampling (stratified on the outcome of return type) and hyperparameters selected based on log loss. The outcome is somewhat unbalanced, since only about 20% of kickoffs that reach the endzone are returned out of the endzone by the receiving team. Therefore in  addition to high accuracy a good model must also be able to distinguish between outcomes so ROC-AUC was used as the performance metric to select hyperparameter values.
 
- -desribe process
- -key featues
- 
+The final model chosen was a Random Forest model based on its ROC-AUC value (good distinction between each outcomes). 
+describe random forest, pros/cons...
+
+
 ## Results
 
 -mention the only input NOT known at time of kickoff is kick length, but that can be controlled by kicker/kicking team

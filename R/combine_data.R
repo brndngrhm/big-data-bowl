@@ -15,7 +15,7 @@ library(nflfastR)
 library(ggimage)
 library(RCurl)
 
-source(here("R", "util.R"))
+source(here::here("R", "util.R"))
 
 #------------------------------------------------
 # load data ----
@@ -32,8 +32,7 @@ list.files(path = here("data", "analysis"), pattern = ".feather") %>%
 remove(kickoff_all, tracking_kickoff, tracking_kickoff_ball)
 
 #------------------------------------------------
-# combine data ----
-
+# combine data and remove some columns ---- 
 model_data_prep <- 
   kickoffs %>%
   filter(return_type %in% c("Endzone Return", "Touchback")) %>%
@@ -53,9 +52,11 @@ model_data_prep <-
   rename(kickoff_from_yardline = yardline_number,
          prev_cuml_avg_ball_in_air_speed_kicking_team = prev_cuml_avg_ball_in_air_speed)
 
+#------------------------------------------------
+# set certain columns as factors ----
 factor_cols <- 
   c("quarter", "recieving_team_timeouts_remaining", "game_half", "surface", "roof", "div_game", "prev_play_result", "prev_play_lead_change", 
-    "prev_endzone_return_attempts", "kick_direction_actual", "kickoff_from_yardline")
+    "prev_endzone_return_attempts", "kick_direction_actual", "kickoff_from_yardline", "primetime_ind")
 
 model_data <- 
   model_data_prep %>%
@@ -69,4 +70,60 @@ model_data <-
 
 str(model_data)
 
+#------------------------------------------------
+# check variables relation to outcome and simplify ----
+numeric_cols <- 
+  model_data %>% 
+  select(-c(game_id)) %>%
+  select(where(is.numeric)) %>%
+  names
+
+categorical_cols <- 
+  model_data %>% 
+  select(-return_type) %>%
+  select(where(is.factor) | where(is.character)) %>%
+  names
+
+numeric_boxplots <-
+  function(col_name){
+    
+    # col_name <- "recieving_team_score_diff"
+    
+    model_data %>%
+      select(return_type, one_of({{col_name}})) %>%
+      rename(predictor = 2) %>%
+      ggplot(., aes(x = return_type, y = predictor, fill = return_type)) + 
+      geom_jitter(alpha = .3, color = 'gray') + 
+      geom_boxplot(alpha = .75, outlier.shape = NA) + 
+      coord_flip() + 
+      theme_minimal() + 
+      scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
+      labs(x = "", y = "", title = paste("Return type vs", {{col_name}}))
+  }
+
+categorical_bar_plots <-
+  function(col_name){
+    
+    model_data %>%
+      select(return_type, one_of({{col_name}})) %>%
+      rename(predictor = 2) %>%
+      group_by(predictor, return_type) %>%
+      tally() %>%
+      mutate(freq = n / sum(n)) %>%
+      ggplot(., aes(x = reorder(predictor, -freq), y = freq, fill = return_type, label = paste0(paste0(round(freq*100, 2), "%"), "\n(n = ", n, ")"))) + 
+      geom_col(position = 'dodge', alpha = .75) + 
+      geom_text(position = position_dodge(width = .9), vjust = -0.5) + 
+      theme_minimal() + 
+      scale_y_continuous(labels = scales::percent, breaks = seq(0, 1, .10)) + 
+      scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
+      labs(x = "", y = "Count", title = "80% of Endzone Kickoffs Result in a Touchback") + 
+      labs(x = "", y = "", title = paste("Return type vs", {{col_name}}))
+  }
+
+map(numeric_cols, ~numeric_boxplots(.x))
+
+map(categorical_cols, ~categorical_bar_plots(.x))
+
+#------------------------------------------------
+# save datasets ----
 write_feather(model_data, path = here("data", "model", "kickoffs_model.feather"))
