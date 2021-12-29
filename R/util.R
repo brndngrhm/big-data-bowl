@@ -45,7 +45,7 @@ load_anaylsis_data <-
 load_data <- 
   function(type, file_name){
     if(!type %in% c("raw", "clean", "analysis")) stop('type must be one of "raw", "clean", "analysis"')
-    feather::read_feather(here("data", {{type}}, {{file_name}}))
+    feather::read_feather(here::here("data", {{type}}, {{file_name}}))
   }
 
 add_big_labels <- 
@@ -114,9 +114,9 @@ get_class_model_rank <-
           rank_results(workflow_models, rank_metric = "mn_log_loss", select_best = FALSE) %>%
           dplyr::select(wflow_id, .config, .metric, mean, std_err, model, mn_log_loss_rank = rank)
         
-        sens_rank <-
-          rank_results(workflow_models, rank_metric = "sens", select_best = FALSE) %>%
-          dplyr::select(wflow_id, .config, .metric, mean, std_err, model, sens_rank = rank)
+        # sens_rank <-
+        #   rank_results(workflow_models, rank_metric = "sens", select_best = FALSE) %>%
+        #   dplyr::select(wflow_id, .config, .metric, mean, std_err, model, sens_rank = rank)
         
         accuracy_rank %>% 
           left_join(., roc_auc_rank, by = c("wflow_id", ".config", ".metric", "mean", "std_err", "model")) %>% 

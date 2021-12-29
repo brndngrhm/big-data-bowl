@@ -22,16 +22,25 @@ library(skimr)
 library(nflfastR)
 library(ggimage)
 library(RCurl)
+library(here)
 
-source(here("R", "util.R"))
+source(here::here("R", "util.R"))
 
 # load data
 
-# read in analysis data files
-file_names <- 
-  c("kickoff_all", "kickoffs", "pbp_kickoff", "scouting_kickoff", "tracking_kickoff", "tracking_kickoff_ball")
+# # read in analysis data files
+# file_names <- 
+#   c("kickoff_all", "kickoffs", "pbp_kickoff", "scouting_kickoff", "tracking_kickoff", "tracking_kickoff_ball")
+# 
+# list.files(path = here::here("data", "analysis"), pattern = ".feather") %>%
+#   map(., ~load_data(type = "analysis", file_name = .x)) %>% 
+#   set_names(nm = file_names) %>% 
+#   list2env(., envir = .GlobalEnv)
 
-list.files(path = here("data", "analysis"), pattern = ".feather") %>%
+file_names <- 
+  c("kickoff_all", "kickoffs", "kickoff_tracking_avg_speed", "pbp_kickoff", "scouting_kickoff", "tracking_kickoff", "tracking_kickoff_ball")
+
+list.files(path = here::here("data", "analysis"), pattern = ".feather") %>%
   map(., ~load_data(type = "analysis", file_name = .x)) %>% 
   set_names(nm = file_names) %>% 
   list2env(., envir = .GlobalEnv)
@@ -63,21 +72,27 @@ After eliminating kickoffs that did not reach the endzone, we can start to explo
 ### Kickoffs
 
 ```{r}
-kickoffs %>%
+kickoff_bar <- 
+  kickoffs %>%
   filter(return_type %in% c("Endzone Return", "Touchback")) %>%
   group_by(season, return_type) %>%
   tally() %>%
   mutate(freq = n/ sum(n)) %>%
   ggplot(., aes(x = return_type, y = n, fill = return_type, label = paste(round(freq*100, 2), "%"))) + 
   geom_col(alpha = .75) +
-  geom_label() + 
+  geom_text(nudge_y = 20) + 
   theme_minimal() + 
   theme(legend.position = 'none',
         text = add_big_labels(text_size = 16)) +
   facet_wrap(.~season) + 
   scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
-  labs(x = "", y = "Count", title = "Endzone returns are somewhat consistent across seasons",
-       subtitle = "About 19% of Endzone Kickoffs are Returned out of the Endzone", align = 'left')
+  labs(x = "", y = "Count")
+
+# title = "Endzone returns are somewhat consistent across seasons",
+#        subtitle = "About 19% of kickoffs that rach the endzone are returned out of the endzone", align = 'left')
+
+
+ggsave(kickoff_bar, filename = here::here("img", "kickoff_bar.svg"))
 ```
 
 ```{r}
@@ -150,8 +165,7 @@ yardline <-
   theme(legend.position = 'none',
         panel.grid.minor = element_blank(),
         text = add_big_labels(text_size = 12)) + 
-  labs(x = "", y = "\nDrive Starting Yardline",
-       title = "Running a kickoff out of the endzone tends to put the recieving team at a disadvantage, and results in a lower EPA\n")
+  labs(x = "", y = "Drive Starting Yardline")
 
 # return type vs EPA
 epa <- 
@@ -159,8 +173,9 @@ epa <-
   left_join(., pbp_kickoff %>% 
               select(old_game_id, play_id, epa) %>% 
               distinct(), by = c("game_id" = "old_game_id", "play_id")) %>%
-  filter(return_type != "Touchback",
-         between(epa, -4, 4)) %>%
+  filter(return_type != "Field Return",
+         between(epa, -4, 4)
+         ) %>% 
   ggplot(., aes(x = return_type, y = epa, fill = return_type)) +
   geom_jitter(alpha = .3, color = 'gray') + 
   geom_boxplot(alpha = .75, outlier.shape = NA) + 
@@ -170,9 +185,12 @@ epa <-
   theme(text = add_big_labels(text_size = 12)) + 
   theme(legend.position = 'none') +
   scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
-  labs(x = "", y = "EPA", title = "\n")
+  labs(x = "", y = "EPA")
 
 ggpubr::ggarrange(yardline, epa, ncol = 2, nrow = 1)
+
+ggsave(yardline, filename = here::here("img", "yardline.svg"))
+ggsave(epa, filename = here::here("img", "epa.svg"))
 
 ```
 
