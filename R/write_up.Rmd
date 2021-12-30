@@ -70,11 +70,13 @@ The full set of features used in the model are as follows. Note: kickoffs that d
 
 Several types of classification models were developed, each tuned using bootstrap resampling (stratified on the outcome of return type) and hyperparameters selected based on log loss. The outcome is somewhat unbalanced, since only about 20% of kickoffs that reach the endzone are returned out of the endzone by the receiving team. Therefore in addition to minimizing log loss, a good model must also be able to distinguish between outcomes so ROC-AUC was considered when selecting a model.
 
+
 The final model chosen was a random forest. Of all models considered, it had the lowest log loss, as well as the highest accuracy and a competitive ROC-AUC value.
 
----- INSERT SOME PLOTS HERE -----
+![](https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/img/model_metrics_comparison.svg)
 
-the most important features are
+
+The most important features in he model are
 
 ---- INSERT SOME PLOTS HERE -----
 
