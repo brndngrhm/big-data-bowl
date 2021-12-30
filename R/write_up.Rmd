@@ -13,7 +13,7 @@ But why is such a model beneficial? When the receiving team returns a kickoff fr
 
 This analysis uses the data provided, supplemented with play-by-play data from the `nflfastR` package, to develop a model capable of predicting if the receiving team will return a kickoff out of their own endzone with 89% accuracy.
 
-# Special teams Planning A Return of Kickoff (SPARK)
+# **S**pecial teams **P**lanning **A** **R**eturn of **K**ickoff (SPARK)
 
 ## Motivation
 
@@ -24,20 +24,18 @@ When a kickoff reaches in the endzone, the receiving team has 2 choices:
  
 It seems like the best alternative would be to take the touchback, and yet about 20% of kickoffs that reach the endzone are returned out of the endzone by the receiving team! 
 
-#### Kickoff Return Types Across Seasons
-![](https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/img/kickoff_bar.svg?token=ADFAP2OOJJVHQLQVKQ66GJLBZT3NA)
+**Endzone returns are somewhat consistent across seasons**
+![](https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/img/kickoff_bar.svg)
 
-Returning a kickoff from the endzone, instead of taking a touchback, results in several disadvantages for the receiving team:
+**Returning a kickoff from the endzone, instead of taking a touchback, results in several disadvantages for the receiving team. Including a worse starting field position (vs both touchback and a field return), and lower EPA**
 
-#### worse starting field position
-![](https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/img/yardline.svg?token=ADFAP2OVSQKXUGIL7CPTW3LBZT3UK)
+![](https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/img/yardline.svg)
 
-#### lower EPA
-![](https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/img/epa.svg?token=ADFAP2MDXE6WFLXAPIKPUBDBZT3VI)
+![](https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/img/epa.svg)
 
 ## Data Preparation & Feature Engineering
 
-In thinking about what might cause a team to run a kickoff out of the endzone, I attempt to create some features to help capture the state of the game just prior to the kickoff. Data used to develop the model is a combination of the provided data sets, as well as play-by-play data from the `nflfastR` package. The play-by-play data is used to generate features that describe certain aspects of the game *just prior* to each kickoff. The only predictors not known prior to kickoff are kickoff-direction and kickoff-depth (i.e. how far into the endzone the ball is kicked), however, these are variables that can be somewhat controlled by the kicking team.
+In thinking about what game conditions might lead to a team to run a kickoff out of the endzone, I attempt to create some features to help capture the state of the game just prior to the kickoff. Data used to develop the model is a combination of the provided data sets, as well as play-by-play data from the `nflfastR` package. The play-by-play data is used to generate features that describe certain aspects of the game *just prior* to each kickoff. The only predictors not known prior to kickoff are kickoff-direction and kickoff-depth (i.e. how far into the endzone the ball is kicked), however, these are variables that can be somewhat controlled by the kicking team.
 
 The full set of features used in the model are as follows. Note: kickoffs that did not reach the endzone were eliminated from the analysis data
 
