@@ -22,16 +22,18 @@ When a kickoff reaches in the endzone, the receiving team has 2 choices:
  * perform a touchback which removes any chance for a penalty or a turnover, *and* results in 25 free yards, or
  * take their chances running the ball out of the endzone and risk a turnover, a setback from a penalty and/or the possibility of not even reaching the 25 yard line
  
-It seems like the best alternative would be to take the touchback, and yet about 20% of kickoffs that reach the endzone are returned out of the endzone by the receiving team! Returning a kickoff from the endzone, instead of taking a touchback, results in several disadvantages for the receiving team:
+It seems like the best alternative would be to take the touchback, and yet about 20% of kickoffs that reach the endzone are returned out of the endzone by the receiving team! 
 
-* worse starting field position
-* lower EPA
-* higher chance of turnover occurring
+#### Kickoff Return Types Across Seasons
+![](https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/img/kickoff_bar.svg?token=ADFAP2OOJJVHQLQVKQ66GJLBZT3NA)
 
-![](https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/img/kickoff_bar.svg?token=ADFAP2MKGO4JDQ2RQACSSBLBZTQXA)
-    
----- INSERT  SOME PLOTS HERE -----
+Returning a kickoff from the endzone, instead of taking a touchback, results in several disadvantages for the receiving team:
 
+#### worse starting field position
+![](https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/img/yardline.svg?token=ADFAP2OVSQKXUGIL7CPTW3LBZT3UK)
+
+#### lower EPA
+![](https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/img/epa.svg?token=ADFAP2MDXE6WFLXAPIKPUBDBZT3VI)
 
 ## Data Preparation & Feature Engineering
 

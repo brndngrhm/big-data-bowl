@@ -8,7 +8,7 @@ editor_options:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, fig.height = 8, fig.width = 12, message = F, warning = F)
+knitr::opts_chunk$set(echo = FALSE, fig.height = 6, fig.width = 10, message = F, warning = F)
 
 library(tidyverse)
 library(lubridate)
@@ -92,7 +92,7 @@ kickoff_bar <-
 #        subtitle = "About 19% of kickoffs that rach the endzone are returned out of the endzone", align = 'left')
 
 
-ggsave(kickoff_bar, filename = here::here("img", "kickoff_bar.svg"))
+ggsave(kickoff_bar, filename = here::here("img", "kickoff_bar.png"))
 ```
 
 ```{r}
@@ -164,7 +164,7 @@ yardline <-
   scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
   theme(legend.position = 'none',
         panel.grid.minor = element_blank(),
-        text = add_big_labels(text_size = 12)) + 
+        text = add_big_labels(text_size = 14)) + 
   labs(x = "", y = "Drive Starting Yardline")
 
 # return type vs EPA
@@ -182,7 +182,7 @@ epa <-
   scale_y_continuous(breaks = seq(-4, 4, .5)) +
   coord_flip() +
   theme_minimal() +
-  theme(text = add_big_labels(text_size = 12)) + 
+  theme(text = add_big_labels(text_size = 14)) + 
   theme(legend.position = 'none') +
   scale_fill_manual(values = c("cornflowerblue", "tomato")) + 
   labs(x = "", y = "EPA")
