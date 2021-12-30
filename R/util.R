@@ -44,7 +44,7 @@ save_experiment <-
       format(Sys.time(), "%Y_%m_%d_%H%M")
     
     path <- 
-      here("R", "experiments", glue::glue("{date}_{workflow_name}.rds"))
+      here("R", "03a_experiments", glue::glue("{date}_{workflow_name}.rds"))
     
     saveRDS(experiment, path)
     

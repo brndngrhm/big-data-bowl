@@ -13,31 +13,24 @@ library(janitor)
 library(timeDate)
 library(nflfastR)
 
-#------------------------------------------------
-# custom functions ----
-
-load_data <- 
-  function(file_name){
-    feather::read_feather(here("data", "raw", {{file_name}}))
-  }
+source(here("R", "util.R"))
 
 #------------------------------------------------
 # load data ----
 file_names <- 
   c("games", "PFFScoutingData", "players", "plays")
 
-# read in .feather files
+# read in .feather files, excluding tracking
 data <- 
   setdiff(list.files(path = here("data", "raw"), pattern = "_raw.feather"),
           list.files(path = here("data", "raw"), pattern = "tracking")) %>%
-  map(., ~load_data(.x)) %>% 
+  map(., ~load_data(.x, type = "raw")) %>% 
   set_names(nm = file_names)
 
 data %>%
   map(glimpse)
 
-#------------------------------------------------
-# load tracking data ----
+# load tracking data
 tracking_file_names <-
   c("tracking2018", "tracking2019", "tracking2020")
 
@@ -45,7 +38,7 @@ tracking_file_names <-
 tracking_data <-
   setdiff(list.files(path = here("data", "raw"), pattern = "tracking"),
           list.files(path = here("data", "raw"), pattern = ".csv")) %>%
-  map(., ~load_data(.x)) %>%
+  map(., ~load_data(.x, type = "raw")) %>%
   set_names(nm = tracking_file_names)
 
 tracking_data %>%
