@@ -3,6 +3,12 @@ title: "SPARK: A model to predict kickoff returns"
 output: html_document
 ---
 
+```{r include = FALSE, warning = FALSE, message = FALSE}
+
+library(caret)
+library(dplyr)
+library(ggplot2)
+```
 # Introduction
 
 If you ever watched an NFL game, you almost surely have heard an commentator say something like "Man, they could really use a spark right about now". This usually in reference to the losing team, who is in need of an explosive play to gain some momentum and get back in the game. One of the "sparks" that can ignite a team is an incredible kickoff return to give the receiving team great field position, setting the drive up for a higher likelihood of resulting in a field goal or touchdown.
@@ -35,7 +41,13 @@ It seems like the best alternative would be to take the touchback, and yet about
 
 ## Data Preparation & Feature Engineering
 
-In thinking about what game conditions might lead to a team to run a kickoff out of the endzone, I attempt to create some features to help capture the state of the game just prior to the kickoff. Data used to develop the model is a combination of the provided data sets, as well as play-by-play data from the `nflfastR` package. The play-by-play data is used to generate features that describe certain aspects of the game *just prior* to each kickoff. The only predictors not known prior to kickoff are kickoff-direction and kickoff-depth (i.e. how far into the endzone the ball is kicked), however, these are variables that can be somewhat controlled by the kicking team.
+In thinking about what game conditions might lead to a team to run a kickoff out of the endzone, I attempt to create some features to help capture the state of the game just prior to the kickoff. in this way, the data represents the information known at the time of kickoff. Examples of thses features include:
+
+ * the cumulative number of previous endzone return attempts
+ * rolling average speed of the kicking team (excluding the kicker) while the ball is in the air
+ * result of the drive immediately preceding the kickoff
+ 
+In addition to the provided data sets, play-by-play data from the `nflfastR` package is used to develop some features. The only predictors not known prior to kickoff are kickoff-direction and kickoff-depth (i.e. how far into the endzone the ball is kicked), however, these are variables that can be somewhat controlled by the kicking team.
 
 The full set of features used in the model are as follows. Note: kickoffs that did not reach the endzone were eliminated from the analysis data
 
@@ -56,7 +68,7 @@ The full set of features used in the model are as follows. Note: kickoffs that d
  * kick length
  * previous endzone return attempts
  * seconds remaining in the half
- * rolling_mean_return_yards_allowed
+ * rolling average return yards allowed by the kicking team
  * game half
  * game quarter
  * kickoff yardline
@@ -66,34 +78,51 @@ The full set of features used in the model are as follows. Note: kickoffs that d
  * average speed of the kicking team (excluding the kicker) while the ball is in the air
  * number of timeouts the receiving team has remaining
  
-## Model
+## Model Development
 
-Several types of classification models were developed, each tuned using bootstrap resampling (stratified on the outcome of return type) and hyperparameters selected based on log loss. The outcome is somewhat unbalanced, since only about 20% of kickoffs that reach the endzone are returned out of the endzone by the receiving team. Therefore in addition to minimizing log loss, a good model must also be able to distinguish between outcomes so ROC-AUC was considered when selecting a model.
-
+A wide variety of classification models were developed and compared, each tuned using bootstrap resampling (stratified on the outcome of return type) and hyperparameters selected based on log loss. The outcome is somewhat unbalanced, since only about 20% of kickoffs that reach the endzone are returned out of the endzone by the receiving team. Therefore in addition to minimizing log loss, a good model must also be able to distinguish between outcomes so ROC-AUC was considered when selecting a model.
 
 The final model chosen was a random forest. Of all models considered, it had the lowest log loss, as well as the highest accuracy and a competitive ROC-AUC value.
 
 ![](https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/img/model_metrics_comparison.svg)
 
-
-The most important features in he model are
-
----- INSERT SOME PLOTS HERE -----
-
-describe random forest, pros/cons...
-
-
 ## Results
 
-The random forest "SPARK" model can predict if the receiving team will return a kickoff out of their own endzone with 89% accuracy. This is 
+The random forest "SPARK" model can predict if the receiving team will return a kickoff out of their own endzone with 89% accuracy.
 
----- INSERT SOME PLOTS/tables HERE -----
+The performance metrics on the test set closely resemble the training metrics, indicating no overfitting is present:
+```{r, echo = FALSE}
+model_perf <- 
+        read.csv("https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/train_test_performance.csv")
+
+ggplot(model_perf, aes(x = .metric, y = value, fill = type)) + 
+        geom_col(position = "dodge", alpha = .75) + 
+        theme_minimal() + 
+        coord_flip() + 
+        scale_fill_manual(values = c("dodgerblue", "tomato"))
+```
+
+Specifics of the test set:
+```{r echo = FALSE}
+
+pred_classes <- 
+        read.csv("https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/pred_classes.csv") %>%
+        mutate(return_type = factor(return_type),
+               .pred_class = factor(.pred_class))
+
+confusionMatrix(pred_classes$return_type, pred_classes$.pred_class)
+```
+
+
+**SPARK feature importance**
+
+![](https://raw.githubusercontent.com/brndngrhm/big-data-bowl/main/img/feature_importance.svg)
 
 ## Limitations
 
- - kickoffs ay be decided in advance not a random variable but themselves the outcome of a decision
- - model may be missing variables, mis-specified
- - Results of the model indicate mention the only input NOT known at time of kickoff is kick length, but that can be controlled by kicker/kicking team
+The kickoff strategy of a return team is a complex decision, likely planned days if not weeks in advance, and there is undoubtedly some important predictors missing in the data. With more time and access to more data, model performance may be improved.
+
+Additionally, the only input *not* known at time of kickoff is kick length and kick direction. I believe these variables are somewhat controllable by the kicking team/kicker, but if that is not the case then the model should not have used those as predictors.
 
 ## Conclusions
 

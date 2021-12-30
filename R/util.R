@@ -16,6 +16,7 @@ round_numerics <-
     data %>%
       mutate(across(where(is.numeric), ~ round(.x, 2)))
   }
+
 add_table <- 
   function(data){
     
@@ -23,23 +24,6 @@ add_table <-
       round_numerics() %>%
       reactable::reactable(., fullWidth = F, resizable = T, filterable = T, highlight = T, defaultPageSize = 10, 
                            showSortIcon = T, striped = T, compact = T, defaultExpanded = T)
-  }
-
-load_clean_data <- 
-  function(file_name){
-    feather::read_feather(here("data", "clean", {{file_name}}))
-  }
-
-load_raw_data <- 
-  function(file_name){
-    feather::read_feather(here("data", "raw", {{file_name}}))
-  }
-
-load_anaylsis_data <- 
-  function(file_name, type){
-    if(!type %in% c("raw", "clean", "analysis")) stop('type must be one of "raw", "clean", "analysis"')
-    
-    feather::read_feather(here("data", {{type}}, {{file_name}}))
   }
 
 load_data <- 
@@ -89,16 +73,10 @@ get_class_model_rank <-
           filter(.metric == "mn_log_loss",
                  rank <= rank_cutoff) %>%
           dplyr::select(wflow_id, .config, .metric, mean, std_err, model, rank)
-        
-        # sens_rank <- rank_results(workflow_models, rank_metric = "sens", select_best = TRUE) %>%
-        #   filter(.metric == "sens",
-        #          rank <= rank_cutoff) %>%
-        #   dplyr::select(wflow_id, .config, .metric, mean, std_err, model, rank)
-        
+
         accuracy_rank %>% 
           bind_rows(., roc_auc_rank) %>% 
           bind_rows(., mn_log_loss_rank)
-          # bind_rows(., sens_rank)
         
       } else {
         
@@ -114,14 +92,9 @@ get_class_model_rank <-
           rank_results(workflow_models, rank_metric = "mn_log_loss", select_best = FALSE) %>%
           dplyr::select(wflow_id, .config, .metric, mean, std_err, model, mn_log_loss_rank = rank)
         
-        # sens_rank <-
-        #   rank_results(workflow_models, rank_metric = "sens", select_best = FALSE) %>%
-        #   dplyr::select(wflow_id, .config, .metric, mean, std_err, model, sens_rank = rank)
-        
         accuracy_rank %>% 
           left_join(., roc_auc_rank, by = c("wflow_id", ".config", ".metric", "mean", "std_err", "model")) %>% 
           left_join(., mn_log_loss_rank, by = c("wflow_id", ".config", ".metric", "mean", "std_err", "model")) %>% 
-          # left_join(., sens_rank, by = c("wflow_id", ".config", ".metric", "mean", "std_err", "model")) %>% 
           filter(accuracy_rank <= rank_cutoff | roc_auc_rank <= rank_cutoff | mn_log_loss_rank <= rank_cutoff)
       }
     
