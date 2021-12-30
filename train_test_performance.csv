@@ -1,0 +1,7 @@
+"",".metric","value","type"
+"1","accuracy",0.891324789514176,"train"
+"2","mn_log_loss",0.254120008896812,"train"
+"3","roc_auc",0.934658077020882,"train"
+"4","accuracy",0.890020366598778,"test"
+"5","mn_log_loss",0.244839567692449,"test"
+"6","roc_auc",0.942196045940575,"test"
