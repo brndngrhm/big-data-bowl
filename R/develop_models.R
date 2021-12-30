@@ -20,9 +20,9 @@ source(here("R", "util.R"))
 kickoffs_model <- 
   read_feather(path = here("data", "model", "kickoffs_model.feather"))
 
-# kickoffs_model %>% add_table()
+kickoffs_model %>% add_table()
 # 
-# str(kickoffs_model)
+str(kickoffs_model)
 
 #------------------------------------------------
 # Explore model data ----
