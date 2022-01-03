@@ -45,7 +45,7 @@ model_data_prep <-
             absolute_yardline_number, return_start, starting_yardline, diff_from_default, game_time_eastern, home_team_abbr, visitor_team_abbr, game_datetime,
             teams, recieving_team, recieving_team_name, kicking_team_name, epa, drive_start_yard_line, home_timeouts_remaining, away_timeouts_remaining,
             stadium, quarter_seconds_remaining,
-            recieving_team_score_diff, season_type, home_team_recieving_ind, holiday, 
+            season_type, home_team_recieving_ind, holiday, 
             overseas_game_ind, month, day_nm, game_tod, game_hour, week, season,
             prev_cuml_endzone_return_yards, prev_cuml_return_yards_allowed)) %>% 
   select(game_id, play_id, return_type, everything()) %>%
