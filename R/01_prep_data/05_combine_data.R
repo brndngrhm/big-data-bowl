@@ -24,7 +24,7 @@ source(here::here("R", "util.R"))
 file_names <- 
   c("kickoff_all", "kickoffs", "kickoff_tracking_avg_speed", "pbp_kickoff", "scouting_kickoff", "tracking_kickoff", "tracking_kickoff_ball")
 
-list.files(path = here("data", "analysis"), pattern = ".feather") %>%
+list.files(path = here::here("data", "analysis"), pattern = ".feather") %>%
   map(., ~load_data(type = "analysis", file_name = .x)) %>% 
   set_names(nm = file_names) %>% 
   list2env(., envir = .GlobalEnv)
@@ -44,7 +44,7 @@ model_data_prep <-
             yardline_side, starts_with("penalty"), starts_with("pre_snap"), pass_result, kick_return_yardage, play_result, 
             absolute_yardline_number, return_start, starting_yardline, diff_from_default, game_time_eastern, home_team_abbr, visitor_team_abbr, game_datetime,
             teams, recieving_team, recieving_team_name, kicking_team_name, epa, drive_start_yard_line, home_timeouts_remaining, away_timeouts_remaining,
-            stadium, quarter_seconds_remaining,
+            stadium, quarter_seconds_remaining, recieving_team_score_diff,
             season_type, home_team_recieving_ind, holiday, 
             overseas_game_ind, month, day_nm, game_tod, game_hour, week, season,
             prev_cuml_endzone_return_yards, prev_cuml_return_yards_allowed)) %>% 
@@ -126,4 +126,4 @@ map(categorical_cols, ~categorical_bar_plots(.x))
 
 #------------------------------------------------
 # save datasets ----
-write_feather(model_data, path = here("data", "model", "kickoffs_model.feather"))
+write_feather(model_data, path = here::here("data", "model", "kickoffs_model.feather"))
